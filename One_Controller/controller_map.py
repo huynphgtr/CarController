@@ -6,6 +6,7 @@ from datetime import datetime
 import requests
 from amqtt.client import MQTTClient
 from amqtt.mqtt.constants import QOS_1
+import collision_avoidance 
 
 MAP_API_URL = "https://hackathon.omelet.tech/api/maps/"
 BROKER_URL = "mqtt://10.12.5.225:1883"  
@@ -18,19 +19,19 @@ TOPIC_SUBSCRIBE_B = "carB/status"
 # STOP_DURATION = 10
 
 class Controller:
-    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B ):
+    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B, pathA, pathB ):
         self.client = MQTTClient()
         self.broker_url = broker_url
-        pathA = [1,2,3,8,9,4,5]
-        edgeA = [1,1,2,1,0,1]
-        pathB = [11,12,13,14,15]
+        edgeA = [1,1,1,1]
         edgeB = [1,1,1,1]
         self.sub_topicA = sub_topic_A
         self.sub_topicB = sub_topic_B
-        self.controllerA = CarController( pub_topic=pub_topic_A, edge=edgeA, path=pathA, client=self.client )
+        self.controllerA = CarController( pub_topic=pub_topic_A, path=pathA, edge=edgeA,  client=self.client )
         self.controllerB = CarController( pub_topic=pub_topic_B, path=pathB, edge=edgeB, client=self.client )
         self.robot_ready_eventA = asyncio.Event()
         self.robot_ready_eventB = asyncio.Event()
+        # print("PathA: ", pathA)
+        # print("PathB: ", pathB)
 
         # --- Cấu trúc dữ liệu cho bản đồ ---
         self.map_data = None      # Lưu trữ JSON thô từ API
@@ -292,7 +293,19 @@ class CarController:
             print("Car go to destination")
     
 if __name__ == "__main__":
-    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B)
+    plan = collision_avoidance.main()
+    print("\nGET PATH")
+    for agv_plan in plan["agv_plans"]:
+        agv_id = agv_plan["agv_id"]  
+        for movement in agv_plan["movements"]:
+            path_list = movement["path"]
+            if(agv_id == "AGV1"): 
+                pathA = path_list
+            elif(agv_id == "AGV2"): 
+                pathB = path_list
+            # print(f"Path for {agv_id}: {path_list}")
+
+    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, pathA, pathB)
     try:
         asyncio.run(controller.run())
     except KeyboardInterrupt:
