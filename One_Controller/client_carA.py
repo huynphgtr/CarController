@@ -45,7 +45,7 @@ class line_tracking_car:
    
     async def listener_task(self):
         print("Listener task started. Car waiting for messages...")    
-        self.state = f"checkpointA,{self.value}"
+        self.state = f"checkpoint,{self.value}"
         await self.publisher_task()  
         time.sleep(10)
         while True:
@@ -59,7 +59,7 @@ class line_tracking_car:
                     print("moving")
                     time.sleep(5)
                     self.update_checkpoint()
-                    self.state = f"checkpointA,{self.value}"
+                    self.state = f"checkpoint,{self.value}"
                     await self.publisher_task()               
                 #turn and stop
                 if command == 'turn right':
