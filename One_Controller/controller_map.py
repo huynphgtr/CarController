@@ -13,18 +13,22 @@ TOPIC_PUBLISH_A = "carA/command"
 TOPIC_SUBSCRIBE_A = "carA/status"
 TOPIC_PUBLISH_B = "carB/command"
 TOPIC_SUBSCRIBE_B = "carB/status"
-SEND_INTERVAL = 10
-MOVE_DURATION = 20
-STOP_DURATION = 10
+# SEND_INTERVAL = 10
+# MOVE_DURATION = 20
+# STOP_DURATION = 10
 
-class controller:
+class Controller:
     def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B ):
         self.client = MQTTClient()
         self.broker_url = broker_url
-        self.pub_topic_A = pub_topic_A
-        self.sub_topic_A = sub_topic_A
-        self.pub_topic_B = pub_topic_B
-        self.sub_topic_B = sub_topic_B
+        pathA = [1,2,3,8,9,4,5]
+        edgeA = [1,1,2,1,0,1]
+        pathB = [11,12,13,14,15]
+        edgeB = [1,1,1,1]
+        self.sub_topicA = sub_topic_A
+        self.sub_topicB = sub_topic_B
+        self.controllerA = CarController( pub_topic=pub_topic_A, edge=edgeA, path=pathA, client=self.client )
+        self.controllerB = CarController( pub_topic=pub_topic_B, path=pathB, edge=edgeB, client=self.client )
         self.robot_ready_eventA = asyncio.Event()
         self.robot_ready_eventB = asyncio.Event()
 
@@ -38,8 +42,7 @@ class controller:
         self.current_position = None   
 
         # self.direction = 1 #change direction N:0 E:1 S:2 W:3
-        # self.path = None
-        # self.edge = None
+
         # self.current_position = None
         # self.current_edge = None
     
@@ -113,10 +116,12 @@ class controller:
                 topic_name = packet.variable_header.topic_name #get topic name
                 payload_str = packet.payload.data.decode()       
                 
+                print(f"\n[LISTEN FROM] '{topic_name}'")
                 if(topic_name == "carA/status"): 
-                    await self.controller_A(payload_str, topic_name)
+                    
+                    await self.controllerA.proccess(payload_str)
                 elif(topic_name == "carB/status"): 
-                    await self.controller_B(payload_str, topic_name)               
+                    await self.controllerB.proccess(payload_str)               
                 
             except asyncio.CancelledError:
                 print("Listener task cancelled.")
@@ -124,19 +129,72 @@ class controller:
             except Exception as e:
                 print(f"Listener error: {e}")
                 break
+        
+    async def automatic_publisher_task(self):
+        print("Publisher task started: Waiting for robot ready signal...")        
+        await self.robot_ready_eventA.wait()
+        await self.robot_ready_eventB.wait()         
+        print("Signal received! Starting automated command cycle.")        
+        # await self.send_move_command() 
 
-    def reset_direction(self, path,current_position,direction): 
-        if current_position == path[0]: 
-            print("change direction from", direction, "to 1")
-            direction = 1
-            
+        # while self.current_position != self.path[-1]:
+        #     await asyncio.sleep(1)     
+        # print(f"Publisher confirms destination {self.path[-1]} reached! Sending final 'STOP' command.")
+        try:
+            await asyncio.gather(
+            self.client.publish(self.pub_topic_A, b'STOP', qos=QOS_1),
+            self.client.publish(self.pub_topic_B, b'STOP', qos=QOS_1)
+            )
+            print(f"Sent 'STOP' command to '{self.pub_topic_A}' and '{self.pub_topic_B}'")
+        except Exception as e:
+            print(f"Error sending 'STOP' commands: {e}")
+        print("Publisher task finished.")
+
+    async def run(self):
+        # map_data = await self.fetch_map(MAP_API_URL)
+        # if not map_data or not self.extract_map(map_data):
+        #     print("Failed to initialize map. Exiting.")
+        #     return       
+        # self.path = [1,2,3,8,9,4,5] 
+        # self.edge = [1,1,2,1,0,1]        
+        
+        try:
+            await self.client.connect(self.broker_url)
+            await self.client.subscribe([(self.sub_topicA, 1)])
+            await self.client.subscribe([(self.sub_topicB, 1)])
+            print(f"Controller connected and listening to '{self.sub_topicA}'")
+            print(f"Controller connected and listening to '{self.sub_topicB}'")
+
+            listener = asyncio.create_task(self.listener_task())
+            sender = asyncio.create_task(self.automatic_publisher_task())                    
+            await sender         
+            listener.cancel()
+
+        except Exception as e:
+            print(f"An error occurred in main run: {e}")
+        finally:
+            print("Disconnecting controller client...")
+            await self.client.disconnect()
+
+class CarController: 
+    def __init__(self, pub_topic, path, edge, client ):
+        self.client = client
+        self.pub_topic = pub_topic
+
+        self.robot_status = None      
+        self.robot_value = None        
+        self.current_position = None   
+
+        self.path = path
+        self.edge = edge
+   
     def check_checkpoint(self, path, value):        
         if value in path:            
             return True
         else:
             print(f"[VALIDATION FAILED] Checkpoint {value} is NOT in the designated path {path}.")
             return False
-
+    
     def next_edge(self, path, current_position,edge):
         try:
             index = path.index(current_position)
@@ -144,12 +202,16 @@ class controller:
                 next_edge_value = -99
             else:
                 next_edge_value = edge[index]
-            print("position:", current_position)
             return next_edge_value
         except ValueError:
             print(f"Error: Current position {current_position} not found in path.")
             return None 
     
+    def reset_direction(self, path,current_position,direction): 
+        if current_position == path[0]: 
+            print("change direction from", direction, "to 1")
+            direction = 1
+
     async def send_move_command(self,pub_topic):
         command = 'move'
         try:
@@ -182,19 +244,18 @@ class controller:
         except Exception as e:
             print(f"Error sending '{command}' command: {e}")
     
-    async def controller_A(self, payload_str, topic_name): 
-        print(f"\n[LISTENING FROM] '{topic_name}'")
+    async def proccess(self, payload_str): 
         print(f"\n[RAW STATUS RECEIVED] '{payload_str}'")    
         direction = 1 
-        path = [1,2,3,8,9,4,5]
-        edge = [1,1,2,1,0,1]
+        # path = [1,2,3,8,9,4,5]
+        # edge = [1,1,2,1,0,1]
         current_position = None
         # current_edge = None                    
         status_type = None
         value = None
         parts = payload_str.split(',')                            
         status_type = parts[0].strip()
-        pub_topic = self.pub_topic_A
+        pub_topic = self.pub_topic
         try:
             value = int(parts[1].strip())
         except ValueError:
@@ -209,123 +270,29 @@ class controller:
         # is_valid_checkpoint = self.check_checkpoint()
         # if not is_valid_checkpoint:
         #     print("!! WARNING: Invalid or out-of-sequence checkpoint received. Robot may be off-track. !!")
-        if status_type == 'checkpointA' and self.check_checkpoint(path,value):
+        if status_type == 'checkpoint' and self.check_checkpoint(self.path,value):
             print(f"Robot has reached valid checkpoint {value}. Updating position.")
             current_position = value
-            self.reset_direction(path,current_position,direction)            
-            if (self.next_edge(path, current_position,edge) - direction) == 0:
+            self.reset_direction(self.path,current_position,direction)            
+            if (self.next_edge(self.path, current_position,self.edge) - direction) == 0:
                 await self.send_move_command(pub_topic)   
-                self.direction = self.next_edge(path, current_position,edge)                     
-            elif ((self.next_edge(path, current_position,edge) - direction) == 1) or ((self.next_edge(path, current_position,edge) - direction) == -3) :                                              
-                await self.send_turnright_command(self.pub_topic_A)   
-                self.direction = self.next_edge(path, current_position,edge)                     
-            elif ((self.next_edge(path, current_position,edge) - direction) == -1) or ((self.next_edge(path, current_position,edge) - direction) == 3):                        
+                self.direction = self.next_edge(self.path, current_position,self.edge)                     
+            elif ((self.next_edge(self.path, current_position,self.edge) - direction) == 1) or ((self.next_edge(self.path, current_position,self.edge) - direction) == -3) :                                              
+                await self.send_turnright_command(self.pub_topic)   
+                self.direction = self.next_edge(self.path, current_position,self.edge)                     
+            elif ((self.next_edge(self.path, current_position,self.edge) - direction) == -1) or ((self.next_edge(self.path, current_position,self.edge) - direction) == 3):                        
                 await self.send_turnleft_command(pub_topic)   
-                self.direction = self.next_edge(path, current_position,edge)                     
-            elif self.next_edge(path, current_position,edge) == -99:                         
+                self.direction = self.next_edge(self.path, current_position,self.edge)                     
+            elif self.next_edge(self.path, current_position,self.edge) == -99:                         
                 await self.send_stop_command(pub_topic)
-                self.direction = self.next_edge(path, current_position,edge)    
+                self.direction = self.next_edge(self.path, current_position,self.edge)    
         if status_type == "done": 
             await self.send_move_command(pub_topic)              
         elif status_type == "stopped": 
             print("Car go to destination")
     
-    async def controller_B(self, payload_str, topic_name): 
-        print(f"\n[LISTENING FROM] '{topic_name}'")
-        print(f"\n[RAW STATUS RECEIVED] '{payload_str}'")    
-        direction = 1 
-        path = [11,12,13,14,15]
-        edge = [1,1,1,1]
-        current_position = None
-        # current_edge = None                    
-        status_type = None
-        value = None
-        pub_topic = self.pub_topic_B
-        parts = payload_str.split(',')                            
-        status_type = parts[0].strip()
-        try:
-            value = int(parts[1].strip())
-        except ValueError:
-            value = parts[1].strip()
-            print(f"[PARSING WARNING] Value '{value}' is not an integer.")
-        
-        # self.robot_status = status_type
-        # self.robot_value = value
-        
-        print(f"  -> Parsed: Status='{status_type}', Value={value}")
-        
-        # is_valid_checkpoint = self.check_checkpoint()
-        # if not is_valid_checkpoint:
-        #     print("!! WARNING: Invalid or out-of-sequence checkpoint received. Robot may be off-track. !!")
-        if status_type == 'checkpointB' and self.check_checkpoint(path,value):
-            print(f"Robot has reached valid checkpoint {value}. Updating position.")
-            current_position = value
-            self.reset_direction(path,current_position,direction)            
-            if (self.next_edge(path, current_position,edge) - direction) == 0:
-                await self.send_move_command(pub_topic)   
-                self.direction = self.next_edge(path, current_position,edge)                     
-            elif ((self.next_edge(path, current_position,edge) - direction) == 1) or ((self.next_edge(path, current_position,edge) - direction) == -3) :                                              
-                await self.send_turnright_command(pub_topic)   
-                self.direction = self.next_edge(path, current_position,edge)                     
-            elif ((self.next_edge(path, current_position,edge) - direction) == -1) or ((self.next_edge(path, current_position,edge) - direction) == 3):                        
-                await self.send_turnleft_command(pub_topic)   
-                self.direction = self.next_edge(path, current_position,edge)                     
-            elif self.next_edge(path, current_position,edge) == -99:                         
-                await self.send_stop_command(pub_topic)
-                self.direction = self.next_edge(path, current_position,edge)    
-        if status_type == "done": 
-            await self.send_move_command(pub_topic)              
-        elif status_type == "stopped": 
-            print("Car go to destination")
-        
-    async def automatic_publisher_task(self):
-        print("Publisher task started: Waiting for robot ready signal...")        
-        await self.robot_ready_eventA.wait()
-        await self.robot_ready_eventB.wait()         
-        print("Signal received! Starting automated command cycle.")        
-        # await self.send_move_command() 
-
-        # while self.current_position != self.path[-1]:
-        #     await asyncio.sleep(1)     
-        # print(f"Publisher confirms destination {self.path[-1]} reached! Sending final 'STOP' command.")
-        try:
-            await asyncio.gather(
-            self.client.publish(self.pub_topic_A, b'STOP', qos=QOS_1),
-            self.client.publish(self.pub_topic_B, b'STOP', qos=QOS_1)
-            )
-            print(f"Sent 'STOP' command to '{self.pub_topic_A}' and '{self.pub_topic_B}'")
-        except Exception as e:
-            print(f"Error sending 'STOP' commands: {e}")
-        print("Publisher task finished.")
-
-    async def run(self):
-        # map_data = await self.fetch_map(MAP_API_URL)
-        # if not map_data or not self.extract_map(map_data):
-        #     print("Failed to initialize map. Exiting.")
-        #     return       
-        # self.path = [1,2,3,8,9,4,5] 
-        # self.edge = [1,1,2,1,0,1]        
-        
-        try:
-            await self.client.connect(self.broker_url)
-            await self.client.subscribe([(self.sub_topic_A, 1)])
-            await self.client.subscribe([(self.sub_topic_B, 1)])
-            print(f"Controller connected and listening to '{self.sub_topic_A}'")
-            print(f"Controller connected and listening to '{self.sub_topic_B}'")
-
-            listener = asyncio.create_task(self.listener_task())
-            sender = asyncio.create_task(self.automatic_publisher_task())                    
-            await sender         
-            listener.cancel()
-
-        except Exception as e:
-            print(f"An error occurred in main run: {e}")
-        finally:
-            print("Disconnecting controller client...")
-            await self.client.disconnect()
-
 if __name__ == "__main__":
-    controller = controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B)
+    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B)
     try:
         asyncio.run(controller.run())
     except KeyboardInterrupt:
