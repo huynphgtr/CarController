@@ -13,7 +13,6 @@ import argparse
 import sys
 from itertools import permutations
 
-
 class MultiAGVPlanner:
     def __init__(self, map_url: str, agv_speeds: Optional[Dict[str, float]] = None):
         self.map_url = map_url
@@ -429,16 +428,6 @@ def main():
         print(f"Error generating plan: {e}")
         sys.exit(1)
     
-    #get result
-    # print("\nGET PATH")
-    # for agv_plan in plan["agv_plans"]:
-    #     agv_id = agv_plan["agv_id"]  
-    #     # Iterate through each movement for the current AGV
-    #     for movement in agv_plan["movements"]:
-    #     # Access the "path" key and print it
-    #         path_list = movement["path"]
-    #         print(f"Path for {agv_id}: {path_list}")
-    
     # Save results
     if args.format == "json":
         with open(args.output, "w") as f:
@@ -487,7 +476,6 @@ def main():
             print(f"  Potential collision between {warning['agv1']} and {warning['agv2']}:")
             for node, time1, time2 in warning["collisions"]:
                 print(f"    - At node {node}: {warning['agv1']} at {time1:.2f}, {warning['agv2']} at {time2:.2f}")
-    return plan
 
 if __name__ == "__main__":
     main()

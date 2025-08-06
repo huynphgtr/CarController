@@ -6,7 +6,7 @@ from datetime import datetime
 import requests
 from amqtt.client import MQTTClient
 from amqtt.mqtt.constants import QOS_1
-import collision_avoidance 
+from collision_avoidance import MultiAGVPlanner
 
 MAP_API_URL = "https://hackathon.omelet.tech/api/maps/"
 BROKER_URL = "mqtt://10.12.5.225:1883"  
@@ -14,26 +14,22 @@ TOPIC_PUBLISH_A = "carA/command"
 TOPIC_SUBSCRIBE_A = "carA/status"
 TOPIC_PUBLISH_B = "carB/command"
 TOPIC_SUBSCRIBE_B = "carB/status"
-# SEND_INTERVAL = 10
-# MOVE_DURATION = 20
-# STOP_DURATION = 10
+TARGET_URL = "https://hackathon.omelet.tech/api/maps/980778ba-4ce1-4094-81d8-aa1f6da40b93/"
+SPEEDS = {"AGV1": 1.0, "AGV2": 1.0}
 
 class Controller:
-    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B, pathA, pathB ):
+    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B, path_A, path_B ):
         self.client = MQTTClient()
         self.broker_url = broker_url
         edgeA = [1,1,1,1]
         edgeB = [1,1,1,1]
         self.sub_topicA = sub_topic_A
         self.sub_topicB = sub_topic_B
-        self.controllerA = CarController( pub_topic=pub_topic_A, path=pathA, edge=edgeA,  client=self.client )
-        self.controllerB = CarController( pub_topic=pub_topic_B, path=pathB, edge=edgeB, client=self.client )
+        self.controllerA = CarController( pub_topic=pub_topic_A, path=path_A, edge=edgeA,  client=self.client )
+        self.controllerB = CarController( pub_topic=pub_topic_B, path=path_B, edge=edgeB, client=self.client )
         self.robot_ready_eventA = asyncio.Event()
         self.robot_ready_eventB = asyncio.Event()
-        # print("PathA: ", pathA)
-        # print("PathB: ", pathB)
 
-        # --- Cấu trúc dữ liệu cho bản đồ ---
         self.map_data = None      # Lưu trữ JSON thô từ API
         self.graph = {}           # Danh sách kề để tìm đường: {node_id: {neighbor_id: 'direction', ...}}
         self.nodes_info = {}      # Lưu trữ chi tiết các node: {node_id: {'x': x, 'y': y, 'type': type}, ...}
@@ -43,71 +39,41 @@ class Controller:
         self.current_position = None   
 
         # self.direction = 1 #change direction N:0 E:1 S:2 W:3
-
         # self.current_position = None
         # self.current_edge = None
     
-    async def fetch_map(self, url):
-
-        print(f"Fetching map from {url}...")
-        try:
-            # Chạy hàm requests.get (đồng bộ) trong một thread riêng để không chặn asyncio
-            response = await asyncio.to_thread(requests.get, url)
-            response.raise_for_status()  # Ném ra lỗi nếu status code là 4xx hoặc 5xx
-
-            json_data = response.json()
-            if "results" in json_data and len(json_data["results"]) > 0:
-                print("Map data fetched successfully.")
-                return json_data["results"][0]
-            else:
-                print("Error: No map data found in API response 'results'.")
-                return None
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching map from API: {e}")
-            return None
-        except json.JSONDecodeError:
-            print("Error: Failed to decode JSON from API response.")
-            return None
-
-    def extract_map(self, map_data):
+    def get_agv_paths(map_url: str, agv_speeds: dict = None) -> dict | None:
         """
-        Xử lý dữ liệu bản đồ đã có:
-        1. Điền vào cấu trúc dữ liệu self.graph và self.nodes_info.
-        2. Tạo file HTML trực quan hóa.
-        Trả về True nếu thành công, False nếu thất bại.
-        """
-        print("Processing and extracting map data...")
-        if not map_data:
-            print("Error: Cannot extract map from empty data.")
-            return False
-
+        Uses the MultiAGVPlanner class to generate a plan and extract the paths.
+        Returns:
+            A dictionary mapping each AGV ID to its path list, or None on failure.
+        """        
+        planner = MultiAGVPlanner(map_url, agv_speeds or {})
+        print("Fetching and building map data...")
+        if not planner.fetch_map_data():
+            print("Failed to fetch map data.")
+            return None        
         try:
-            # Lưu dữ liệu map thô
-            self.map_data = map_data
+            planner.build_adjacency_list()
+        except ValueError as e:
+            print(f"Error building graph: {e}")
+            return None
+        print("Generating the AGV plan...")
+        try:
+            full_plan = planner.generate_multi_agv_plan()
+        except ValueError as e:
+            print(f"Error generating plan: {e}")
+            return None
 
-            # 1. Trích xuất thông tin node và xây dựng cấu trúc graph
-            for node in self.map_data.get('nodes', []):
-                self.nodes_info[node['id']] = {'x': node['x'], 'y': node['y'], 'type': node['type']}
-                self.graph[node['id']] = {}
+        agv_paths = {}
+        if full_plan and "agv_plans" in full_plan:
+            for agv_plan in full_plan["agv_plans"]:
+                agv_id = agv_plan["agv_id"]
+                path = agv_plan["movements"][0]["path"]
+                agv_paths[agv_id] = path
 
-            # 2. Xây dựng danh sách kề từ các cạnh (edges)
-            for edge in self.map_data.get('edges', []):
-                source_id = edge['source']
-                target_id = edge['target']
-                label = edge['label']  # Hướng đi ('N', 'E', 'S', 'W')
-                if source_id in self.graph:
-                    self.graph[source_id][target_id] = label
-                else:
-                    print(f"Warning: Source node {source_id} from an edge was not found in the nodes list.")
+        return agv_paths
 
-            print(f"Map extracted successfully: {len(self.nodes_info)} nodes, {len(self.map_data.get('edges', []))} edges.")
-
-
-            return True
-        except Exception as e:
-            print(f"An error occurred during map extraction: {e}")
-            return False
-    
     async def listener_task(self):
         print("Listener task started: Waiting for robot status updates...")
         while True:
@@ -293,19 +259,13 @@ class CarController:
             print("Car go to destination")
     
 if __name__ == "__main__":
-    plan = collision_avoidance.main()
-    print("\nGET PATH")
-    for agv_plan in plan["agv_plans"]:
-        agv_id = agv_plan["agv_id"]  
-        for movement in agv_plan["movements"]:
-            path_list = movement["path"]
-            if(agv_id == "AGV1"): 
-                pathA = path_list
-            elif(agv_id == "AGV2"): 
-                pathB = path_list
-            # print(f"Path for {agv_id}: {path_list}")
-
-    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, pathA, pathB)
+    
+    extracted_paths = Controller.get_agv_paths(TARGET_URL, SPEEDS)
+    PATHA = extracted_paths['AGV1']
+    PATHB = extracted_paths['AGV2']
+    print("Path A: ", PATHA)    
+    print("Path B: ", PATHB)    
+    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATHA, PATHB)
     try:
         asyncio.run(controller.run())
     except KeyboardInterrupt:
