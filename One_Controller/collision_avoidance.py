@@ -61,6 +61,7 @@ class MultiAGVPlanner:
         for edge in edges:
             source = edge["source"]
             target = edge["target"]
+            # label = edge["label"]
             weight = edge.get("weight", 1.0)
 
             # Add bidirectional edges

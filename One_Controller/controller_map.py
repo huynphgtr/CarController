@@ -4,6 +4,7 @@ import random
 import time
 from datetime import datetime
 import requests
+from typing import Dict, List, Any, Optional
 from amqtt.client import MQTTClient
 from amqtt.mqtt.constants import QOS_1
 from collision_avoidance import MultiAGVPlanner
@@ -16,23 +17,22 @@ TOPIC_PUBLISH_B = "carB/command"
 TOPIC_SUBSCRIBE_B = "carB/status"
 TARGET_URL = "https://hackathon.omelet.tech/api/maps/980778ba-4ce1-4094-81d8-aa1f6da40b93/"
 SPEEDS = {"AGV1": 1.0, "AGV2": 1.0}
+DIRECTION_MAP = {"N": 0, "E": 1, "S": 2, "W": 3}
 
 class Controller:
-    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B, path_A, path_B ):
+    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B, path_A, path_B, edge_A, edge_B):
         self.client = MQTTClient()
         self.broker_url = broker_url
-        edgeA = [1,1,1,1]
-        edgeB = [1,1,1,1]
         self.sub_topicA = sub_topic_A
         self.sub_topicB = sub_topic_B
-        self.controllerA = CarController( pub_topic=pub_topic_A, path=path_A, edge=edgeA,  client=self.client )
-        self.controllerB = CarController( pub_topic=pub_topic_B, path=path_B, edge=edgeB, client=self.client )
+        self.controllerA = CarController( pub_topic=pub_topic_A, path=path_A, edge=edge_A,  client=self.client )
+        self.controllerB = CarController( pub_topic=pub_topic_B, path=path_B, edge=edge_B, client=self.client )
         self.robot_ready_eventA = asyncio.Event()
         self.robot_ready_eventB = asyncio.Event()
 
-        self.map_data = None      # Lưu trữ JSON thô từ API
-        self.graph = {}           # Danh sách kề để tìm đường: {node_id: {neighbor_id: 'direction', ...}}
-        self.nodes_info = {}      # Lưu trữ chi tiết các node: {node_id: {'x': x, 'y': y, 'type': type}, ...}
+        # self.map_data = None      # Lưu trữ JSON thô từ API
+        # self.graph = {}           # Danh sách kề để tìm đường: {node_id: {neighbor_id: 'direction', ...}}
+        # self.nodes_info = {}      # Lưu trữ chi tiết các node: {node_id: {'x': x, 'y': y, 'type': type}, ...}
 
         self.robot_status = None      
         self.robot_value = None        
@@ -73,7 +73,79 @@ class Controller:
                 agv_paths[agv_id] = path
 
         return agv_paths
+    
+    def get_directions_from_paths(map_url: str, agv_paths: Dict[Any, List[int]]) -> Optional[Dict[Any, List[int]]]:
+        """
+        Fetches a map from a URL and converts AGV paths (lists of nodes) into 
+        sequences of numerical directions.
 
+        Args:
+            map_url: The URL to fetch the JSON map data from.
+            agv_paths: A dictionary mapping an AGV identifier to its path,
+                    where a path is a list of node integers.
+                    Example: {'AGV1': [1, 2, 3], 'AGV2': [8, 7, 6]}
+
+        Returns:
+            A dictionary mapping each AGV identifier to a list of numerical directions
+            corresponding to its path, or None if an error occurs.
+            Example: {'AGV1': [1, 1], 'AGV2': [3, 3]}
+        """
+        # 1. Fetch and parse the map data from the URL
+        try:
+            response = requests.get(map_url)
+            response.raise_for_status()
+            map_data = response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching map data: {e}")
+            return None
+
+        # 2. Get the "edges" and build an efficient lookup table
+        # The lookup table maps a (source, target) tuple to its label (e.g., 'E')
+        # This is much faster than searching the list of edges for every step in a path.
+        if "edges" not in map_data:
+            print("Error: 'edges' key not found in map data.")
+            return None        
+        edge_label_lookup = {}
+        try:
+            for edge in map_data["edges"]:
+                edge_label_lookup[(edge["source"], edge["target"])] = edge["label"]
+        except (KeyError, TypeError) as e:
+            print(f"Error: Malformed edge data in map. Details: {e}")
+            return None
+
+        # 3. Process each AGV path to convert it to directions
+        all_agv_directions = {}
+        for agv_id, path in agv_paths.items():
+            if not path or len(path) < 2:
+                all_agv_directions[agv_id] = [] # Path is too short to have movements
+                continue
+                
+            directions_list = []
+            # Iterate through the path to get pairs of (source, target) nodes
+            for i in range(len(path) - 1):
+                source_node = path[i]
+                target_node = path[i+1]
+                
+                # Find the label for the current movement (e.g., 1 -> 2)
+                label = edge_label_lookup.get((source_node, target_node))
+                
+                if label is None:
+                    print(f"Warning: No edge found for movement {source_node}->{target_node} in AGV '{agv_id}' path. Skipping this step.")
+                    continue
+
+                # Convert the label ('N', 'E', 'S', 'W') to its corresponding number
+                direction_code = DIRECTION_MAP.get(label)
+                
+                if direction_code is None:
+                    print(f"Warning: Unknown label '{label}' for movement {source_node}->{target_node}. Skipping this step.")
+                    continue
+                
+                directions_list.append(direction_code)
+                
+            all_agv_directions[agv_id] = directions_list
+
+        return all_agv_directions    
+    
     async def listener_task(self):
         print("Listener task started: Waiting for robot status updates...")
         while True:
@@ -258,14 +330,22 @@ class CarController:
         elif status_type == "stopped": 
             print("Car go to destination")
     
-if __name__ == "__main__":
-    
+if __name__ == "__main__":    
+    #get paths
     extracted_paths = Controller.get_agv_paths(TARGET_URL, SPEEDS)
     PATHA = extracted_paths['AGV1']
     PATHB = extracted_paths['AGV2']
     print("Path A: ", PATHA)    
     print("Path B: ", PATHB)    
-    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATHA, PATHB)
+
+    #get directions
+    directions = Controller.get_directions_from_paths(TARGET_URL, extracted_paths)
+    EDGEA = directions['AGV1']
+    EDGEB = directions['AGV2']
+    print("Edge A: ", EDGEA)    
+    print("Edge B: ", EDGEB)    
+
+    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATHA, PATHB, EDGEA, EDGEB)
     try:
         asyncio.run(controller.run())
     except KeyboardInterrupt:
