@@ -333,19 +333,19 @@ class CarController:
 if __name__ == "__main__":    
     #get paths
     extracted_paths = Controller.get_agv_paths(TARGET_URL, SPEEDS)
-    PATHA = extracted_paths['AGV1']
-    PATHB = extracted_paths['AGV2']
-    print("Path A: ", PATHA)    
-    print("Path B: ", PATHB)    
+    PATH_A = extracted_paths['AGV1']
+    PATH_B = extracted_paths['AGV2']
+    print("Path A: ", PATH_A)    
+    print("Path B: ", PATH_B)    
 
     #get directions
     directions = Controller.get_directions_from_paths(TARGET_URL, extracted_paths)
-    EDGEA = directions['AGV1']
-    EDGEB = directions['AGV2']
-    print("Edge A: ", EDGEA)    
-    print("Edge B: ", EDGEB)    
+    EDGE_A = directions['AGV1']
+    EDGE_B = directions['AGV2']
+    print("Edge A: ", EDGE_A)    
+    print("Edge B: ", EDGE_B)    
 
-    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATHA, PATHB, EDGEA, EDGEB)
+    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATH_A, PATH_B, EDGE_A, EDGE_B)
     try:
         asyncio.run(controller.run())
     except KeyboardInterrupt:
