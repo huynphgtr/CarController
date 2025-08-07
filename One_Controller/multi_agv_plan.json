@@ -1,24 +1,24 @@
 {
   "map_id": "980778ba-4ce1-4094-81d8-aa1f6da40b93",
   "agv_count": 2,
-  "total_distance": 8.0,
-  "total_time": 4.0,
+  "total_distance": 9.0,
+  "total_time": 5.5,
   "agv_plans": [
     {
       "agv_id": "AGV1",
       "start_node": 1,
-      "destination": 5,
+      "destination": 9,
       "speed": 1.0,
       "movements": [
         {
           "from": 1,
-          "to": 5,
+          "to": 9,
           "path": [
             1,
             2,
             3,
             4,
-            5
+            9
           ],
           "distance": 4.0,
           "travel_time": 4.0,
@@ -40,7 +40,7 @@
               3.0
             ],
             [
-              5,
+              9,
               4.0
             ]
           ]
@@ -52,50 +52,55 @@
     {
       "agv_id": "AGV2",
       "start_node": 11,
-      "destination": 15,
+      "destination": 10,
       "speed": 1.0,
       "movements": [
         {
           "from": 11,
-          "to": 15,
+          "to": 10,
           "path": [
             11,
-            12,
-            13,
-            14,
-            15
+            6,
+            7,
+            8,
+            9,
+            10
           ],
-          "distance": 4.0,
-          "travel_time": 4.0,
+          "distance": 5.0,
+          "travel_time": 5.0,
           "scheduled_path": [
             [
               11,
               0
             ],
             [
-              12,
+              6,
               1.0
             ],
             [
-              13,
+              7,
               2.0
             ],
             [
-              14,
+              8,
               3.0
             ],
             [
-              15,
-              4.0
+              9,
+              4.5
+            ],
+            [
+              10,
+              5.5
             ]
           ]
         }
       ],
-      "total_distance": 4.0,
-      "total_time": 4.0
+      "total_distance": 5.0,
+      "total_time": 5.5
     }
   ],
-  "timestamp": "2025-08-06T10:21:51.536286",
+  "timestamp": "2025-08-07T09:43:59.233449",
   "agv_speeds": {},
   "collision_avoidance_enabled": true
 }

@@ -374,7 +374,7 @@ def main():
     parser = argparse.ArgumentParser(description="Multi-AGV Path Planning Tool with Speed Optimization")
     parser.add_argument(
         "--url",
-        default="https://hackathon.omelet.tech/api/maps/980778ba-4ce1-4094-81d8-aa1f6da40b93/",
+        default="http://127.0.0.1:5500/One_Controller/map.json",
         help="Map API URL",
     )
     parser.add_argument("--output", default="multi_agv_plan.json", help="Output file name")

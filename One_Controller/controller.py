@@ -9,13 +9,13 @@ from amqtt.client import MQTTClient
 from amqtt.mqtt.constants import QOS_1
 from collision_avoidance import MultiAGVPlanner
 
-MAP_API_URL = "https://hackathon.omelet.tech/api/maps/"
+# MAP_API_URL = "https://hackathon.omelet.tech/api/maps/"
 BROKER_URL = "mqtt://10.12.5.225:1883"  
 TOPIC_PUBLISH_A = "carA/command"
 TOPIC_SUBSCRIBE_A = "carA/status"
 TOPIC_PUBLISH_B = "carB/command"
 TOPIC_SUBSCRIBE_B = "carB/status"
-TARGET_URL = "https://hackathon.omelet.tech/api/maps/980778ba-4ce1-4094-81d8-aa1f6da40b93/"
+TARGET_URL = "http://127.0.0.1:5500/One_Controller/map.json"
 SPEEDS = {"AGV1": 1.0, "AGV2": 1.0}
 DIRECTION_MAP = {"N": 0, "E": 1, "S": 2, "W": 3}
 
@@ -345,8 +345,8 @@ if __name__ == "__main__":
     print("Edge A: ", EDGE_A)    
     print("Edge B: ", EDGE_B)    
 
-    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATH_A, PATH_B, EDGE_A, EDGE_B)
-    try:
-        asyncio.run(controller.run())
-    except KeyboardInterrupt:
-        print("\nProgram stopped.")
+    # controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATH_A, PATH_B, EDGE_A, EDGE_B)
+    # try:
+    #     asyncio.run(controller.run())
+    # except KeyboardInterrupt:
+    #     print("\nProgram stopped.")
