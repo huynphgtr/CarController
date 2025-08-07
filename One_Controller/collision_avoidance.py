@@ -286,6 +286,7 @@ class MultiAGVPlanner:
 
             # Find optimal assignment
             assignment, total_time = self.find_optimal_assignment(self.start_nodes, self.destination_nodes)
+            print("Assignment", assignment)
             print(f"Optimal assignment found with total completion time: {total_time:.2f} time units")
         else:
             assignment = agv_assignments
@@ -463,12 +464,12 @@ def main():
     print(f"Total completion time: {plan['total_time']:.2f} time units")
 
     # Display summary
-    # print("\nAssignment Summary:")
-    # for agv in plan["agv_plans"]:
-    #     print(f"  {agv['agv_id']}: {agv['start_node']} → {agv['destination']}")
-    #     print(f"    - Distance: {agv['total_distance']:.2f}")
-    #     print(f"    - Speed: {agv['speed']:.2f} units/sec")
-    #     print(f"    - Completion time: {agv['total_time']:.2f} time units")
+    print("\nAssignment Summary:")
+    for agv in plan["agv_plans"]:
+        print(f"  {agv['agv_id']}: {agv['start_node']} → {agv['destination']}")
+        print(f"    - Distance: {agv['total_distance']:.2f}")
+        print(f"    - Speed: {agv['speed']:.2f} units/sec")
+        print(f"    - Completion time: {agv['total_time']:.2f} time units")
     
     # Display collision warnings if any
     if "collision_warnings" in plan:

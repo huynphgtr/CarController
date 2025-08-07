@@ -1,15 +1,15 @@
 import asyncio
+import heapq
 import json
 import random
 import time
 from datetime import datetime
 import requests
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from amqtt.client import MQTTClient
 from amqtt.mqtt.constants import QOS_1
 from collision_avoidance import MultiAGVPlanner
 
-# MAP_API_URL = "https://hackathon.omelet.tech/api/maps/"
 BROKER_URL = "mqtt://10.12.5.225:1883"  
 TOPIC_PUBLISH_A = "carA/command"
 TOPIC_SUBSCRIBE_A = "carA/status"
@@ -19,62 +19,107 @@ TARGET_URL = "http://127.0.0.1:5500/One_Controller/map.json"
 SPEEDS = {"AGV1": 1.0, "AGV2": 1.0}
 DIRECTION_MAP = {"N": 0, "E": 1, "S": 2, "W": 3}
 
-class Controller:
-    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B, path_A, path_B, edge_A, edge_B):
-        self.client = MQTTClient()
-        self.broker_url = broker_url
-        self.sub_topicA = sub_topic_A
-        self.sub_topicB = sub_topic_B
-        self.controllerA = CarController( pub_topic=pub_topic_A, path=path_A, edge=edge_A,  client=self.client )
-        self.controllerB = CarController( pub_topic=pub_topic_B, path=path_B, edge=edge_B, client=self.client )
-        self.robot_ready_eventA = asyncio.Event()
-        self.robot_ready_eventB = asyncio.Event()
-
-        # self.map_data = None      # Lưu trữ JSON thô từ API
-        # self.graph = {}           # Danh sách kề để tìm đường: {node_id: {neighbor_id: 'direction', ...}}
-        # self.nodes_info = {}      # Lưu trữ chi tiết các node: {node_id: {'x': x, 'y': y, 'type': type}, ...}
-
-        self.robot_status = None      
-        self.robot_value = None        
-        self.current_position = None   
-
-        # self.direction = 1 #change direction N:0 E:1 S:2 W:3
-        # self.current_position = None
-        # self.current_edge = None
-    
-    def get_agv_paths(map_url: str, agv_speeds: dict = None) -> dict | None:
+class MyMultiAGVPlanner(MultiAGVPlanner):  
+    def __init__(self, map_url: str, agv_speeds: Optional[Dict[str, float]] = None):
+        super().__init__(map_url, agv_speeds)
+        self.planner = None
+        self.defined_visited = set()
+        
+    def dijkstra(self, start: str, end: str) -> Tuple[List[str], float]:
         """
-        Uses the MultiAGVPlanner class to generate a plan and extract the paths.
-        Returns:
-            A dictionary mapping each AGV ID to its path list, or None on failure.
-        """        
-        planner = MultiAGVPlanner(map_url, agv_speeds or {})
+        Find shortest path using Dijkstra's algorithm with caching
+        """
+        # Check cache
+        cache_key = (start, end)
+        if cache_key in self.distance_cache:
+            return self.distance_cache[cache_key]
+
+        if start not in self.adjacency_list or end not in self.adjacency_list:
+            return [], float("inf")
+
+        # Distance from start to each node
+        distances = {node: float("inf") for node in self.adjacency_list}
+        distances[start] = 0
+
+        # Previous node in optimal path
+        previous = {node: None for node in self.adjacency_list}
+
+        # Priority queue: (distance, node)
+        pq = [(0, start)]
+        # visited = set()
+        visited = self.defined_visited # defined_visited # set([2,3])
+
+        while pq:
+            current_distance, current_node = heapq.heappop(pq)
+
+            if current_node in visited:
+                continue
+
+            visited.add(current_node)
+
+            # Found destination
+            if current_node == end:
+                break
+
+            # Check neighbors
+            for neighbor, weight in self.adjacency_list[current_node]:
+                distance = current_distance + weight
+
+                if distance < distances[neighbor]:
+                    distances[neighbor] = distance
+                    previous[neighbor] = current_node
+                    heapq.heappush(pq, (distance, neighbor))
+
+        # Reconstruct path
+        path = []
+        current = end
+        while current is not None:
+            path.append(current)
+            current = previous[current]
+
+        if path[-1] != start:  # No path found
+            result = ([], float("inf"))
+        else:
+            path.reverse()
+            result = (path, distances[end])
+
+        # Cache result
+        self.distance_cache[cache_key] = result
+        return result
+
+    def generate_plan(self, map_url: str, agv_speeds: dict = None) -> dict | None:
+        self.planner = MyMultiAGVPlanner(map_url, agv_speeds or {})
         print("Fetching and building map data...")
-        if not planner.fetch_map_data():
+        if not self.planner.fetch_map_data():
             print("Failed to fetch map data.")
             return None        
         try:
-            planner.build_adjacency_list()
+            self.planner.build_adjacency_list()
         except ValueError as e:
             print(f"Error building graph: {e}")
             return None
         print("Generating the AGV plan...")
+        print(f"Found {len(self.planner.start_nodes)} start nodes: {self.planner.start_nodes}")
+        print(f"Found {len(self.planner.destination_nodes)} destination nodes: {self.planner.destination_nodes}")
+        return self.planner
+    
+    def extract_path(planner, assignments: Dict[str, str]) -> dict | None:    
         try:
-            full_plan = planner.generate_multi_agv_plan()
+            full_plan = planner.generate_multi_agv_plan(assignments)
+            agv_paths = {}
+            if full_plan and "agv_plans" in full_plan:
+                for agv_plan in full_plan["agv_plans"]:
+                    agv_id = agv_plan["agv_id"]
+                    path = agv_plan["movements"][0]["path"]
+                    agv_paths[agv_id] = path
+            planner.defined_visited = set(path)
         except ValueError as e:
             print(f"Error generating plan: {e}")
             return None
 
-        agv_paths = {}
-        if full_plan and "agv_plans" in full_plan:
-            for agv_plan in full_plan["agv_plans"]:
-                agv_id = agv_plan["agv_id"]
-                path = agv_plan["movements"][0]["path"]
-                agv_paths[agv_id] = path
-
-        return agv_paths
+        return agv_paths  
     
-    def get_directions_from_paths(map_url: str, agv_paths: Dict[Any, List[int]]) -> Optional[Dict[Any, List[int]]]:
+    def extract_direction(map_url: str, agv_paths: Dict[Any, List[int]]) -> Optional[Dict[Any, List[int]]]:
         """
         Fetches a map from a URL and converts AGV paths (lists of nodes) into 
         sequences of numerical directions.
@@ -146,6 +191,38 @@ class Controller:
 
         return all_agv_directions    
     
+class CarPlan: 
+    def __init__(self, planner, assignment: Dict[str, str]):
+        path = MyMultiAGVPlanner.extract_path(planner, assignment) 
+        direction = MyMultiAGVPlanner.extract_direction(map_url=TARGET_URL,agv_paths=path)
+        self.path = path['AGV1']
+        self.direction = direction['AGV1']
+        self.start = list(assignment.keys())[0]
+        self.destination = list(assignment.values())[0]
+
+class Controller:
+    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B, path_A, path_B, edge_A, edge_B):
+        self.client = MQTTClient()
+        self.broker_url = broker_url
+        self.sub_topicA = sub_topic_A
+        self.sub_topicB = sub_topic_B
+        self.controllerA = CarController( pub_topic=pub_topic_A, path=path_A, edge=edge_A,  client=self.client )
+        self.controllerB = CarController( pub_topic=pub_topic_B, path=path_B, edge=edge_B, client=self.client )
+        self.robot_ready_eventA = asyncio.Event()
+        self.robot_ready_eventB = asyncio.Event()
+
+        # self.map_data = None      # Lưu trữ JSON thô từ API
+        # self.graph = {}           # Danh sách kề để tìm đường: {node_id: {neighbor_id: 'direction', ...}}
+        # self.nodes_info = {}      # Lưu trữ chi tiết các node: {node_id: {'x': x, 'y': y, 'type': type}, ...}
+
+        self.robot_status = None      
+        self.robot_value = None        
+        self.current_position = None   
+
+        # self.direction = 1 #change direction N:0 E:1 S:2 W:3
+        # self.current_position = None
+        # self.current_edge = None
+        
     async def listener_task(self):
         print("Listener task started: Waiting for robot status updates...")
         while True:
@@ -189,14 +266,7 @@ class Controller:
             print(f"Error sending 'STOP' commands: {e}")
         print("Publisher task finished.")
 
-    async def run(self):
-        # map_data = await self.fetch_map(MAP_API_URL)
-        # if not map_data or not self.extract_map(map_data):
-        #     print("Failed to initialize map. Exiting.")
-        #     return       
-        # self.path = [1,2,3,8,9,4,5] 
-        # self.edge = [1,1,2,1,0,1]        
-        
+    async def run(self):        
         try:
             await self.client.connect(self.broker_url)
             await self.client.subscribe([(self.sub_topicA, 1)])
@@ -330,23 +400,24 @@ class CarController:
         elif status_type == "stopped": 
             print("Car go to destination")
     
-if __name__ == "__main__":    
-    #get paths
-    extracted_paths = Controller.get_agv_paths(TARGET_URL, SPEEDS)
-    PATH_A = extracted_paths['AGV1']
-    PATH_B = extracted_paths['AGV2']
-    print("Path A: ", PATH_A)    
-    print("Path B: ", PATH_B)    
+if __name__ == "__main__":   
+    
+    planner = MyMultiAGVPlanner.generate_plan(self=MyMultiAGVPlanner,map_url=TARGET_URL, agv_speeds=SPEEDS)      
+    
+    assignment1 = {planner.start_nodes[0]:planner.destination_nodes[0]}
+    assignment2 = {planner.start_nodes[1]:planner.destination_nodes[1]}
+    
+    car1 = CarPlan(planner,assignment1)
+    car2 = CarPlan(planner,assignment2)
+    
+    PATH_A = car1.path 
+    EDGE_A = car1.direction
+    PATH_B = car2.path
+    EDGE_B = car2.direction
+    print(PATH_A, PATH_B)
 
-    #get directions
-    directions = Controller.get_directions_from_paths(TARGET_URL, extracted_paths)
-    EDGE_A = directions['AGV1']
-    EDGE_B = directions['AGV2']
-    print("Edge A: ", EDGE_A)    
-    print("Edge B: ", EDGE_B)    
-
-    # controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATH_A, PATH_B, EDGE_A, EDGE_B)
-    # try:
-    #     asyncio.run(controller.run())
-    # except KeyboardInterrupt:
-    #     print("\nProgram stopped.")
+    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATH_A, PATH_B, EDGE_A, EDGE_B)
+    try:
+        asyncio.run(controller.run())
+    except KeyboardInterrupt:
+        print("\nProgram stopped.")
