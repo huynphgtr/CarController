@@ -20,7 +20,7 @@ class line_tracking_car:
         self.state = None
         self.value = None
         self.current_index = None
-        self.path = [11,12,13,14,15] 
+        self.path = [11, 12, 13, 14, 15, 10]
         if self.path:
             self.current_index = 0
             self.value = self.path[self.current_index] 

@@ -13,7 +13,6 @@ import argparse
 import sys
 from itertools import permutations
 
-
 class MultiAGVPlanner:
     def __init__(self, map_url: str, agv_speeds: Optional[Dict[str, float]] = None):
         self.map_url = map_url
@@ -62,6 +61,7 @@ class MultiAGVPlanner:
         for edge in edges:
             source = edge["source"]
             target = edge["target"]
+            # label = edge["label"]
             weight = edge.get("weight", 1.0)
 
             # Add bidirectional edges
@@ -286,6 +286,7 @@ class MultiAGVPlanner:
 
             # Find optimal assignment
             assignment, total_time = self.find_optimal_assignment(self.start_nodes, self.destination_nodes)
+            print("Assignment", assignment)
             print(f"Optimal assignment found with total completion time: {total_time:.2f} time units")
         else:
             assignment = agv_assignments
@@ -374,7 +375,7 @@ def main():
     parser = argparse.ArgumentParser(description="Multi-AGV Path Planning Tool with Speed Optimization")
     parser.add_argument(
         "--url",
-        default="https://hackathon.omelet.tech/api/maps/980778ba-4ce1-4094-81d8-aa1f6da40b93/",
+        default="http://127.0.0.1:5500/One_Controller/map.json",
         help="Map API URL",
     )
     parser.add_argument("--output", default="multi_agv_plan.json", help="Output file name")
@@ -429,16 +430,6 @@ def main():
         print(f"Error generating plan: {e}")
         sys.exit(1)
     
-    #get result
-    # print("\nGET PATH")
-    # for agv_plan in plan["agv_plans"]:
-    #     agv_id = agv_plan["agv_id"]  
-    #     # Iterate through each movement for the current AGV
-    #     for movement in agv_plan["movements"]:
-    #     # Access the "path" key and print it
-    #         path_list = movement["path"]
-    #         print(f"Path for {agv_id}: {path_list}")
-    
     # Save results
     if args.format == "json":
         with open(args.output, "w") as f:
@@ -473,12 +464,12 @@ def main():
     print(f"Total completion time: {plan['total_time']:.2f} time units")
 
     # Display summary
-    # print("\nAssignment Summary:")
-    # for agv in plan["agv_plans"]:
-    #     print(f"  {agv['agv_id']}: {agv['start_node']} → {agv['destination']}")
-    #     print(f"    - Distance: {agv['total_distance']:.2f}")
-    #     print(f"    - Speed: {agv['speed']:.2f} units/sec")
-    #     print(f"    - Completion time: {agv['total_time']:.2f} time units")
+    print("\nAssignment Summary:")
+    for agv in plan["agv_plans"]:
+        print(f"  {agv['agv_id']}: {agv['start_node']} → {agv['destination']}")
+        print(f"    - Distance: {agv['total_distance']:.2f}")
+        print(f"    - Speed: {agv['speed']:.2f} units/sec")
+        print(f"    - Completion time: {agv['total_time']:.2f} time units")
     
     # Display collision warnings if any
     if "collision_warnings" in plan:
@@ -487,7 +478,6 @@ def main():
             print(f"  Potential collision between {warning['agv1']} and {warning['agv2']}:")
             for node, time1, time2 in warning["collisions"]:
                 print(f"    - At node {node}: {warning['agv1']} at {time1:.2f}, {warning['agv2']} at {time2:.2f}")
-    return plan
 
 if __name__ == "__main__":
     main()
