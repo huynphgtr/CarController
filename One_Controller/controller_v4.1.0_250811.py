@@ -1,9 +1,11 @@
 import asyncio
 import heapq
+from itertools import chain
 import json
 import random
 import time
 from datetime import datetime
+import traceback
 import requests
 from typing import Dict, List, Any, Optional, Tuple
 from amqtt.client import MQTTClient
@@ -17,14 +19,30 @@ TOPIC_PUBLISH_B = "carB/command"
 TOPIC_SUBSCRIBE_B = "carB/status"
 TARGET_URL = "http://127.0.0.1:5500/One_Controller/map.json"
 SPEEDS = {"AGV1": 1.0, "AGV2": 1.0}
-DIRECTION_MAP = {"N": 0, "E": 1, "S": 2, "W": 3}
-
-class MyMultiAGVPlanner(MultiAGVPlanner):  
+DIRECTION_MAP = {"N": 0, "E": 1, "S": 2, "W": 3} 
+ 
+class MyMultiAGVPlannerV2(MultiAGVPlanner):
     def __init__(self, map_url: str, agv_speeds: Optional[Dict[str, float]] = None):
-        super().__init__(map_url, agv_speeds)
-        self.planner = None
-        self.defined_visited = set()
+        super().__init__(map_url, agv_speeds)  
+        self.pre_visited = set()
         
+        # car plan
+        self.planner = None
+        # self.assignment = assignment
+        self.assignment = None
+        # path = MyMultiAGVPlanner.extract_path(planner, assignment) 
+        # direction = MyMultiAGVPlanner.extract_direction(map_url=TARGET_URL,agv_paths=path)
+        # self.path = path['AGV1']
+        # self.direction = direction['AGV1']
+        # self.start = list(assignment.keys())[0]
+        # self.destination = list(assignment.values())[0]
+        self.start = None
+        self.destination = None
+        self.current_position = self.start
+        # self.update_path()
+        self.path = None
+        self.direction = None
+
     def dijkstra(self, start: str, end: str) -> Tuple[List[str], float]:
         """
         Find shortest path using Dijkstra's algorithm with caching
@@ -46,8 +64,7 @@ class MyMultiAGVPlanner(MultiAGVPlanner):
 
         # Priority queue: (distance, node)
         pq = [(0, start)]
-        # visited = set()
-        visited = self.defined_visited # defined_visited # set([2,3])
+        visited = self.pre_visited # set()
 
         while pq:
             current_distance, current_node = heapq.heappop(pq)
@@ -87,23 +104,20 @@ class MyMultiAGVPlanner(MultiAGVPlanner):
         self.distance_cache[cache_key] = result
         return result
 
-    def generate_plan(self, map_url: str, agv_speeds: dict = None) -> dict | None:
-        self.planner = MyMultiAGVPlanner(map_url, agv_speeds or {})
-        print("Fetching and building map data...")
-        if not self.planner.fetch_map_data():
-            print("Failed to fetch map data.")
-            return None        
-        try:
-            self.planner.build_adjacency_list()
-        except ValueError as e:
-            print(f"Error building graph: {e}")
-            return None
-        print("Generating the AGV plan...")
-        print(f"Found {len(self.planner.start_nodes)} start nodes: {self.planner.start_nodes}")
-        print(f"Found {len(self.planner.destination_nodes)} destination nodes: {self.planner.destination_nodes}")
-        return self.planner
-    
-    def extract_path(planner, assignments: Dict[str, str]) -> dict | None:    
+    # def update_path(self):
+    #     # Recalculate path from current_position to destination
+    #     path, _ = self.planner.dijkstra(self.current_position, self.destination)
+    #     direction = self.extract_direction(map_url=TARGET_URL, agv_paths={'AGV1': path})
+    #     self.path = path
+    #     self.direction = direction['AGV1']
+
+    # def move_to_next(self):
+    #     if self.path and len(self.path) > 1:
+    #         self.current_position = self.path[1]  # Move to next node
+    #         self.path = self.path[1:]  # Remove visited node
+    #         self.update_path()         # Recalculate path
+
+    def extract_path(self, planner, assignments: Dict[str, str]) -> dict | None:    
         try:
             full_plan = planner.generate_multi_agv_plan(assignments)
             agv_paths = {}
@@ -119,22 +133,7 @@ class MyMultiAGVPlanner(MultiAGVPlanner):
 
         return agv_paths  
     
-    def extract_direction(map_url: str, agv_paths: Dict[Any, List[int]]) -> Optional[Dict[Any, List[int]]]:
-        """
-        Fetches a map from a URL and converts AGV paths (lists of nodes) into 
-        sequences of numerical directions.
-
-        Args:
-            map_url: The URL to fetch the JSON map data from.
-            agv_paths: A dictionary mapping an AGV identifier to its path,
-                    where a path is a list of node integers.
-                    Example: {'AGV1': [1, 2, 3], 'AGV2': [8, 7, 6]}
-
-        Returns:
-            A dictionary mapping each AGV identifier to a list of numerical directions
-            corresponding to its path, or None if an error occurs.
-            Example: {'AGV1': [1, 1], 'AGV2': [3, 3]}
-        """
+    def extract_direction(self, map_url: str, agv_paths: Dict[Any, List[int]]) -> Optional[Dict[Any, List[int]]]:
         # 1. Fetch and parse the map data from the URL
         try:
             response = requests.get(map_url)
@@ -145,8 +144,6 @@ class MyMultiAGVPlanner(MultiAGVPlanner):
             return None
 
         # 2. Get the "edges" and build an efficient lookup table
-        # The lookup table maps a (source, target) tuple to its label (e.g., 'E')
-        # This is much faster than searching the list of edges for every step in a path.
         if "edges" not in map_data:
             print("Error: 'edges' key not found in map data.")
             return None        
@@ -190,40 +187,36 @@ class MyMultiAGVPlanner(MultiAGVPlanner):
             all_agv_directions[agv_id] = directions_list
 
         return all_agv_directions    
-    
-class CarPlan: 
-    def __init__(self, planner, assignment: Dict[str, str]):
-        path = MyMultiAGVPlanner.extract_path(planner, assignment) 
-        direction = MyMultiAGVPlanner.extract_direction(map_url=TARGET_URL,agv_paths=path)
-        self.path = path['AGV1']
-        self.direction = direction['AGV1']
-        self.start = list(assignment.keys())[0]
-        self.destination = list(assignment.values())[0]
 
 class Controller:
-    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B, path_A, path_B, edge_A, edge_B):
+    def __init__(self, broker_url, pub_topic_A, sub_topic_A, pub_topic_B, sub_topic_B):
         self.client = MQTTClient()
         self.broker_url = broker_url
+        self.pub_topic_A = pub_topic_A
         self.sub_topicA = sub_topic_A
+        self.pub_topic_B = pub_topic_B
         self.sub_topicB = sub_topic_B
-        self.controllerA = CarController( pub_topic=pub_topic_A, path=path_A, edge=edge_A,  client=self.client )
-        self.controllerB = CarController( pub_topic=pub_topic_B, path=path_B, edge=edge_B, client=self.client )
+        # self.controllerA = CarController( pub_topic=pub_topic_A, path=path_A, edge=edge_A,  client=self.client, car_plan= car1)
+        # self.controllerB = CarController( pub_topic=pub_topic_B, path=path_B, edge=edge_B, client=self.client , car_plan=car2)
+        self.car_planner1 = MyMultiAGVPlannerV2(map_url=TARGET_URL, agv_speeds=SPEEDS)
+        self.car_planner2 = MyMultiAGVPlannerV2(map_url=TARGET_URL, agv_speeds=SPEEDS) 
+
+        self.controllerA = CarController(self.pub_topic_A, self.client, self.car_planner1)
+        self.controllerB = CarController(self.pub_topic_B, self.client, self.car_planner2) 
+
+        # self.carA = carA
+        # self.carB = carB
         self.robot_ready_eventA = asyncio.Event()
         self.robot_ready_eventB = asyncio.Event()
 
-        # self.map_data = None      # Lưu trữ JSON thô từ API
-        # self.graph = {}           # Danh sách kề để tìm đường: {node_id: {neighbor_id: 'direction', ...}}
-        # self.nodes_info = {}      # Lưu trữ chi tiết các node: {node_id: {'x': x, 'y': y, 'type': type}, ...}
-
-        self.robot_status = None      
-        self.robot_value = None        
-        self.current_position = None   
-
-        # self.direction = 1 #change direction N:0 E:1 S:2 W:3
-        # self.current_position = None
-        # self.current_edge = None
-        
-    async def listener_task(self):
+        # self.robot_status = None      
+        # self.robot_value = None        
+        # self.current_position = None  
+        # self.car_planners = []
+        # self.car_planners.append(MyMultiAGVPlannerV2(map_url=TARGET_URL, agv_speeds=SPEEDS))
+        # self.car_planners.append(MyMultiAGVPlannerV2(map_url=TARGET_URL, agv_speeds=SPEEDS)) 
+            
+    async def listener_task(self): 
         print("Listener task started: Waiting for robot status updates...")
         while True:
             try:
@@ -233,10 +226,10 @@ class Controller:
                 payload_str = packet.payload.data.decode()       
                 
                 print(f"\n[LISTEN FROM] '{topic_name}'")
-                if(topic_name == "carA/status"): 
-                    
+                if(topic_name == "carA/status"):                    
                     await self.controllerA.proccess(payload_str)
                 elif(topic_name == "carB/status"): 
+                    self.controllerB.another_checkpoints = self.controllerA.path  
                     await self.controllerB.proccess(payload_str)               
                 
             except asyncio.CancelledError:
@@ -244,6 +237,7 @@ class Controller:
                 break
             except Exception as e:
                 print(f"Listener error: {e}")
+                traceback.print_exc() 
                 break
         
     async def automatic_publisher_task(self):
@@ -266,7 +260,16 @@ class Controller:
             print(f"Error sending 'STOP' commands: {e}")
         print("Publisher task finished.")
 
-    async def run(self):        
+    async def run(self): 
+        print("Fetching and building map data...")
+        self.controllerA.fetch_map()
+        self.controllerA.get_path_direction([], self.controllerA.car_plan.start_nodes[0], 
+                                            self.controllerA.car_plan.destination_nodes[0])
+
+        self.controllerB.fetch_map()
+        self.controllerB.get_path_direction(self.controllerA.path, 
+                                            self.controllerB.car_plan.start_nodes[1], 
+                                            self.controllerB.car_plan.destination_nodes[1])
         try:
             await self.client.connect(self.broker_url)
             await self.client.subscribe([(self.sub_topicA, 1)])
@@ -278,7 +281,6 @@ class Controller:
             sender = asyncio.create_task(self.automatic_publisher_task())                    
             await sender         
             listener.cancel()
-
         except Exception as e:
             print(f"An error occurred in main run: {e}")
         finally:
@@ -286,17 +288,91 @@ class Controller:
             await self.client.disconnect()
 
 class CarController: 
-    def __init__(self, pub_topic, path, edge, client ):
+    def __init__(self, pub_topic, client, car_plan: MyMultiAGVPlannerV2):
         self.client = client
         self.pub_topic = pub_topic
 
-        self.robot_status = None      
-        self.robot_value = None        
+        # self.robot_status = None      
+        # self.robot_value = None        
         self.current_position = None   
+        self.destination = None
+        self.next_position = None
+        self.path = None
+        self.edge = None
+        self.direction = None
+        self.visited_checkpoints = []
+        self.another_checkpoints = []
+        self.car_plan = car_plan
 
+    def get_path_direction(self, pre_visited_path, start, end):
+        # print("Defined path: ", pre_visited_path)
+        # visited_checkpoints = list(chain.from_iterable(pre_visited_path))
+        # self.fetch_map() 
+        #     assignment1 = {self.car_plan.start_nodes[0]:self.car_plan.destination_nodes[0]}
+        assignment1 = {start:end}
+        try:   
+            self.car_plan.pre_visited = set(pre_visited_path)            
+            # print(self.car_plan.pre_visited)
+            full_plan = self.car_plan.generate_multi_agv_plan(assignment1)
+            agv_paths = {}
+            if full_plan and "agv_plans" in full_plan:
+                for agv_plan in full_plan["agv_plans"]:
+                    agv_id = agv_plan["agv_id"]
+                    path = agv_plan["movements"][0]["path"]
+                    agv_paths[agv_id] = path
+        except ValueError as e:
+            print(f"Error generating plan: {e}") 
+        # path1 = path
+        agv_paths1 = agv_paths
+        print(path)
+        print(f"Found {len(self.car_plan.start_nodes)} start nodes: {self.car_plan.start_nodes}")
+        print(f"Found {len(self.car_plan.destination_nodes)} start nodes: {self.car_plan.destination_nodes}")
+        
+        direction1 = self.car_plan.extract_direction(map_url=TARGET_URL,agv_paths=agv_paths1)
+        self.car_plan.direction = direction1['AGV1']
         self.path = path
-        self.edge = edge
-   
+        self.edge = self.car_plan.direction
+
+    def fetch_map(self):
+        if not self.car_plan.fetch_map_data():
+            print("Failed to fetch map data.") 
+        try:
+            self.car_plan.build_adjacency_list()
+        except ValueError as e:
+            print(f"Error building graph: {e}")
+    
+    def refactor_path(self):
+        self.get_path_direction(self.another_checkpoints, 
+                                self.current_position, 
+                                self.destination)
+        
+    def update_path(self):
+        # Recalculate path from current_position to destination
+        # self.next_position = self.path[1]
+        # print("next position: ", self.next_position)
+        if self.path and len(self.path) > 1:
+            # self.car_plan = MyMultiAGVPlannerV2(map_url=TARGET_URL, agv_speeds=SPEEDS)
+            self.refactor_path()
+        
+        # if self.path and len(self.path) > 1:
+        #     self.path = self.path[1:]
+        #     print(self.path)
+        #     self.edge = self.edge[1:]
+        #     print(self.edge)
+        # path, _ = self.car_plan.dijkstra(self.next_position, self.destination)
+        # print("path after udating", path)
+        # direction = self.car_plan.extract_direction(map_url=TARGET_URL, agv_paths={'AGV1': self.path})
+        
+        # self.path = path
+        # self.direction = self.direction[1:]
+    
+    # def move_to_next(self):
+    #     print("self path: ", self.path)
+    #     if self.path and len(self.path) > 1:
+    #         self.next_position = self.path[1]  # Move to next node
+    #         self.path = self.path[1:]  # Remove visited node
+    #         self.update_path()         # Recalculate path
+    
     def check_checkpoint(self, path, value):        
         if value in path:            
             return True
@@ -304,9 +380,11 @@ class CarController:
             print(f"[VALIDATION FAILED] Checkpoint {value} is NOT in the designated path {path}.")
             return False
     
-    def next_edge(self, path, current_position,edge):
+    def next_edge(self, path, current_position, edge):
+        # print("Edge", edge)
         try:
             index = path.index(current_position)
+            # print("index ", index, edge)
             if index == len(path) - 1:
                 next_edge_value = -99
             else:
@@ -356,10 +434,8 @@ class CarController:
     async def proccess(self, payload_str): 
         print(f"\n[RAW STATUS RECEIVED] '{payload_str}'")    
         direction = 1 
-        # path = [1,2,3,8,9,4,5]
-        # edge = [1,1,2,1,0,1]
-        current_position = None
-        # current_edge = None                    
+        self.direction = direction
+        current_position = None                 
         status_type = None
         value = None
         parts = payload_str.split(',')                            
@@ -379,10 +455,16 @@ class CarController:
         # is_valid_checkpoint = self.check_checkpoint()
         # if not is_valid_checkpoint:
         #     print("!! WARNING: Invalid or out-of-sequence checkpoint received. Robot may be off-track. !!")
-        if status_type == 'checkpoint' and self.check_checkpoint(self.path,value):
+        if status_type == 'checkpoint':  #and self.check_checkpoint(self.path,value):
             print(f"Robot has reached valid checkpoint {value}. Updating position.")
             current_position = value
-            self.reset_direction(self.path,current_position,direction)            
+            self.reset_direction(self.path,current_position,direction)  
+            self.current_position = current_position 
+            self.destination = self.path[-1] 
+            # print(f"Current position: {self.current_position}, Destination: {self.destination}")
+            # self.car_plan.current_position = current_position  
+            # print("Check", self.car_plan.path)    
+            # self.reset_direction(self.path,current_position,direction)            
             if (self.next_edge(self.path, current_position,self.edge) - direction) == 0:
                 await self.send_move_command(pub_topic)   
                 self.direction = self.next_edge(self.path, current_position,self.edge)                     
@@ -394,29 +476,47 @@ class CarController:
                 self.direction = self.next_edge(self.path, current_position,self.edge)                     
             elif self.next_edge(self.path, current_position,self.edge) == -99:                         
                 await self.send_stop_command(pub_topic)
-                self.direction = self.next_edge(self.path, current_position,self.edge)    
+                self.direction = self.next_edge(self.path, current_position,self.edge)   
+            # if (self.next_edge(self.car_plan.path ,self.car_plan.current_position,self.car_plan.direction) - direction) == 0:
+            #     await self.send_move_command(pub_topic)   
+            #     self.direction = self.next_edge(self.car_plan.path , self.car_plan.current_position,self.car_plan.direction)                     
+            # elif ((self.next_edge(self.car_plan.path , self.car_plan.current_position,self.car_plan.direction) - direction) == 1) or ((self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction) - direction) == -3) :                                              
+            #     await self.send_turnright_command(self.pub_topic)   
+            #     self.direction = self.next_edge(self.car_plan.path ,self.car_plan.current_position,self.car_plan.direction)                     
+            # elif ((self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction) - direction) == -1) or ((self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction) - direction) == 3):                        
+            #     await self.send_turnleft_command(pub_topic)   
+            #     self.direction = self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction)                     
+            # elif self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction) == -99:                         
+            #     await self.send_stop_command(pub_topic)
+            #     self.direction = self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction)    
+            # if (self.next_edge(self.path,self.current_position,self.direction) - direction) == 0:
+            #     await self.send_move_command(pub_topic)   
+            #     self.direction = self.next_edge(self.path,self.current_position,self.direction)                     
+            # elif ((self.next_edge(self.car_plan.path,self.car_plan.current_position,self.car_plan.direction) - direction) == 1) or ((self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction) - direction) == -3) :                                              
+            #     await self.send_turnright_command(self.pub_topic)   
+            #     self.direction = self.next_edge(self.car_plan.path ,self.car_plan.current_position,self.car_plan.direction)                     
+            # elif ((self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction) - direction) == -1) or ((self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction) - direction) == 3):                        
+            #     await self.send_turnleft_command(pub_topic)   
+            #     self.direction = self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction)                     
+            # elif self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction) == -99:                         
+            #     await self.send_stop_command(pub_topic)
+            #     self.direction = self.next_edge(self.car_plan.path, self.car_plan.current_position,self.car_plan.direction)    
+        self.visited_checkpoints.append(self.current_position)
+        # print("Visited checkpoint: ", self.visited_checkpoints)
+        self.update_path()
+
+        # self.get_path_direction(another_checkpoints)
+        # self.get_path_direction(self.visited_checkpoints, 0)
+        # print("current path", self.path)   
+
         if status_type == "done": 
             await self.send_move_command(pub_topic)              
         elif status_type == "stopped": 
             print("Car go to destination")
-    
-if __name__ == "__main__":   
-    
-    planner = MyMultiAGVPlanner.generate_plan(self=MyMultiAGVPlanner,map_url=TARGET_URL, agv_speeds=SPEEDS)      
-    
-    assignment1 = {planner.start_nodes[0]:planner.destination_nodes[0]}
-    assignment2 = {planner.start_nodes[1]:planner.destination_nodes[1]}
-    
-    car1 = CarPlan(planner,assignment1)
-    car2 = CarPlan(planner,assignment2)
-    
-    PATH_A = car1.path 
-    EDGE_A = car1.direction
-    PATH_B = car2.path
-    EDGE_B = car2.direction
-    print(PATH_A, PATH_B)
 
-    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B, PATH_A, PATH_B, EDGE_A, EDGE_B)
+if __name__ == "__main__":  
+    # controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B,PATH_A, EDGE_A,PATH_B,EDGE_B )
+    controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B)
     try:
         asyncio.run(controller.run())
     except KeyboardInterrupt:

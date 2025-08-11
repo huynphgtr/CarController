@@ -20,7 +20,8 @@ class line_tracking_car:
         self.state = None
         self.value = None
         self.current_index = None
-        self.path = [11, 12, 13, 14, 15, 10]
+        # self.path = [11, 12, 13, 14, 15, 10]
+        self.path = [11, 6]
         if self.path:
             self.current_index = 0
             self.value = self.path[self.current_index] 
@@ -65,11 +66,13 @@ class line_tracking_car:
                 if command == 'turn right':
                     print("turn right done")
                     time.sleep(5)
+                    self.update_checkpoint()
                     self.state = "done,0"  
                     await self.publisher_task()
                 elif command == 'turn left':
                     print("turn left done")
                     time.sleep(5)
+                    # self.update_checkpoint()
                     self.state = "done,0"  
                     await self.publisher_task()
                 elif command == 'stop' :
