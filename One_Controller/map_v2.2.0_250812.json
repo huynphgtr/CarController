@@ -1,0 +1,169 @@
+{
+    "id": "980778ba-4ce1-4094-81d8-aa1f6da40b93",
+    "name": "Custom Public Map",
+    "mapType": "custom",
+    "orderIndex": 10,
+    "dimensions": {
+        "width": 5,
+        "height": 3
+    },
+    "nodes": [
+        {
+            "id": 1,
+            "x": 0,
+            "y": 0,
+            "type": "START"
+        },
+        {
+            "id": 2,
+            "x": 1,
+            "y": 0,
+            "type": "NORMAL"
+        },
+        {
+            "id": 3,
+            "x": 2,
+            "y": 0,
+            "type": "NORMAL"
+        },
+        {
+            "id": 4,
+            "x": 3,
+            "y": 0,
+            "type": "NORMAL"
+        },
+        {
+            "id": 6,
+            "x": 0,
+            "y": 1,
+            "type": "START"
+        },
+        {
+            "id": 7,
+            "x": 1,
+            "y": 1,
+            "type": "NORMAL"
+        },
+        {
+            "id": 8,
+            "x": 2,
+            "y": 1,
+            "type": "DESTINATION"
+        },
+        {
+            "id": 9,
+            "x": 3,
+            "y": 1,
+            "type": "DESTINATION"
+        }
+    ],
+    "edges": [
+        {
+            "id": "1-2",
+            "source": 1,
+            "target": 2,
+            "label": "E"
+        },
+        {
+            "id": "1-6",
+            "source": 1,
+            "target": 6,
+            "label": "S"
+        },
+        {
+            "id": "2-1",
+            "source": 2,
+            "target": 1,
+            "label": "W"
+        },
+        {
+            "id": "2-3",
+            "source": 2,
+            "target": 3,
+            "label": "E"
+        },
+        {
+            "id": "2-7",
+            "source": 2,
+            "target": 7,
+            "label": "S"
+        },
+        {
+            "id": "3-2",
+            "source": 3,
+            "target": 2,
+            "label": "W"
+        },
+        {
+            "id": "3-8",
+            "source": 3,
+            "target": 8,
+            "label": "S"
+        },
+        {
+            "id": "4-9",
+            "source": 4,
+            "target": 9,
+            "label": "S"
+        },
+        {
+            "id": "6-1",
+            "source": 6,
+            "target": 1,
+            "label": "N"
+        },
+        {
+            "id": "7-2",
+            "source": 7,
+            "target": 2,
+            "label": "N"
+        },
+        {
+            "id": "7-8",
+            "source": 7,
+            "target": 8,
+            "label": "E"
+        },
+        {
+            "id": "8-3",
+            "source": 8,
+            "target": 3,
+            "label": "N"
+        },
+        {
+            "id": "8-7",
+            "source": 8,
+            "target": 7,
+            "label": "W"
+        },
+        {
+            "id": "8-9",
+            "source": 8,
+            "target": 9,
+            "label": "E"
+        },
+        {
+            "id": "9-4",
+            "source": 9,
+            "target": 4,
+            "label": "N"
+        },
+        {
+            "id": "9-8",
+            "source": 9,
+            "target": 8,
+            "label": "W"
+        }
+    ],
+    "startingPositions": [
+        1,
+        6
+    ],
+    "destinationPositions": [
+        8,
+        9
+    ],
+    "barriersOpen": false,
+    "startTime": "2025-07-29T03:34:13.541020Z",
+    "isPublic": true
+}

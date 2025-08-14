@@ -21,7 +21,8 @@ class line_tracking_car:
         self.state = None
         self.value = None
         self.current_index = None
-        self.path = [1, 2, 3, 4, 9]
+        # self.path = [6, 1, 2, 3, 8, 9]
+        self.path = [6, 1, 2, 3, 4, 9]
         if self.path:
             self.current_index = 0
             self.value = self.path[self.current_index] 
@@ -33,7 +34,7 @@ class line_tracking_car:
         if self.is_at_end():
             print("Action blocked: Already at the end of the path.")
             return False
-        print(f"Action 'move': From index {self.path[self.current_index]} to {self.path[self.current_index + 1]}")
+        print(f"Moving from index {self.path[self.current_index]} to {self.path[self.current_index + 1]}")
         self.current_index += 1
         self.value = self.path[self.current_index]
         return True

@@ -20,8 +20,8 @@ class line_tracking_car:
         self.state = None
         self.value = None
         self.current_index = None
-        # self.path = [11, 12, 13, 14, 15, 10]
-        self.path = [11, 6]
+        self.path = [1, 2, 3, 8]
+        # self.path = [11, 6]
         if self.path:
             self.current_index = 0
             self.value = self.path[self.current_index] 
@@ -33,7 +33,7 @@ class line_tracking_car:
         if self.is_at_end():
             print("Action blocked: Already at the end of the path.")
             return False
-        print(f"Action 'move': From index {self.path[self.current_index]} to {self.path[self.current_index + 1]}")
+        print(f"Moving from index {self.path[self.current_index]} to {self.path[self.current_index + 1]}")
         self.current_index += 1
         self.value = self.path[self.current_index]
         return True
@@ -66,7 +66,7 @@ class line_tracking_car:
                 if command == 'turn right':
                     print("turn right done")
                     time.sleep(5)
-                    self.update_checkpoint()
+                    # self.update_checkpoint()
                     self.state = "done,0"  
                     await self.publisher_task()
                 elif command == 'turn left':
@@ -80,7 +80,17 @@ class line_tracking_car:
                     time.sleep(5)
                     self.state = "stopped,0"  
                     await self.publisher_task()
-            
+                
+                #status waiting
+                elif command == 'wait': 
+                    print("waiting")
+                    time.sleep(5)
+                    # self.update_checkpoint()
+                    # self.state = "waiting done,0"  
+                    # self.state = f"waiting done,{self.value}"  
+                    self.state = f"checkpoint,{self.value}"  
+                    await self.publisher_task()
+
             except Exception as e:
                 print(f"Listener error: {e}")
                 break
