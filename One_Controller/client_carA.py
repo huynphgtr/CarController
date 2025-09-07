@@ -22,7 +22,10 @@ class line_tracking_car:
         self.value = None
         self.current_index = None
         # self.path = [6, 1, 2, 3, 8, 9]
-        self.path = [6, 1, 2, 3, 4, 9]
+        # self.path = [6, 1, 2, 3, 4, 9]
+        # self.path = [1, 2, 3, 8]
+        # self.path = [1, 2, 3, 4]
+        self.path = [1, 2, 7, 8]
         if self.path:
             self.current_index = 0
             self.value = self.path[self.current_index] 
@@ -78,7 +81,23 @@ class line_tracking_car:
                     time.sleep(5)
                     self.state = "stopped,0"  
                     await self.publisher_task()
-            
+                elif command == 'wait': 
+                    print("waiting")
+                    time.sleep(10) 
+                    self.state = f"checkpoint,{self.value}"  
+                    await self.publisher_task()
+                elif command == 'turn 45 degree': 
+                    print("turned 45 degree")
+                elif command == 'move out': 
+                    print("moved out")
+                    time.sleep(30)
+                    self.path = [1, 2, 3, 8]
+                    self.current_index = 0
+                    self.value = self.path[self.current_index]
+                    self.state = f"checkpoint,{self.value}"
+                    # self.update_checkpoint()
+                    await self.publisher_task()
+
             except Exception as e:
                 print(f"Listener error: {e}")
                 break

@@ -213,7 +213,8 @@ class Controller:
                 payload_str = packet.payload.data.decode()       
                 
                 print(f"\n[LISTEN FROM] '{topic_name}'")
-                if(topic_name == "carA/status"):                    
+                if(topic_name == "carA/status"):  
+                    self.controllerA.another_checkpoints = self.controllerB.path
                     await self.controllerA.proccess(payload_str)
                 elif(topic_name == "carB/status"): 
                     self.controllerB.another_checkpoints = self.controllerA.path  
@@ -252,50 +253,6 @@ class Controller:
         path1 = controller.path 
         # print("Path found: ", path1)
         return path1    
-    
-    # def find_point_pairs(self):
-    #     planner =  MyMultiAGVPlanner(map_url=TARGET_URL, agv_speeds=SPEEDS) 
-    #     controller = CarController(self.pub_topic_A, self.client, planner)              
-    #     controller.fetch_map()
-        
-    #     start0 = controller.car_plan.start_nodes[0] #1
-    #     dest0 = controller.car_plan.destination_nodes[0] #8
-        
-    #     start1 = controller.car_plan.start_nodes[1] #6 
-    #     dest1 = controller.car_plan.destination_nodes[1] #9
-        
-    #     path1 = self.find_path(controller, dest0, start1, dest1)
-    #     path2 = self.find_path(controller, dest1, start0, dest0)
-    #     path3 = self.find_path(controller, dest0, start0, dest1)
-    #     path4 = self.find_path(controller, dest1, start1, dest0)
-        
-    #     len1 = len(path1)
-    #     len2 = len(path2)
-    #     len3 = len(path3)
-    #     len4 = len(path4)
-
-    #     #two path
-    #     if(path1 != [] and path2 != [] and path3 != [] and path4 != []):
-    #         if (len1+len2)<=(len3+len4): 
-    #             return  start0, dest0 ,start1, dest1
-    #         else: 
-    #             return start0, dest1, start1, dest0  
-    #     elif(path1 != [] and path2 != []): 
-    #         return  start0, dest0 ,start1, dest1
-    #     elif(path3 != [] and path4 != []): 
-    #         return start0, dest1, start1, dest0
-        
-    #     #one path
-    #     elif(path1 == [] and path2 != []): 
-    #         return  start1, dest1 ,start0, dest0      
-    #     elif (path1 != [] and path2 == []): 
-    #         return start0, dest0, start1, dest1
-    #     elif(path3 == [] and path4!= []): 
-    #         return start0, dest1, start1, dest0           
-    #     elif (path3 != [] and path4 == []): 
-    #         return start1, dest0, start0, dest1
-    #     else:
-    #         print("Have no path")
 
     def find_point_pairs(self):
         planner = MyMultiAGVPlanner(map_url=TARGET_URL, agv_speeds=SPEEDS)
@@ -359,16 +316,9 @@ class Controller:
         print("Have no path")
         return None
     
-    # def set_priority(self, start0, start1 ): 
-    #     if (start0 == self.start0): return 'A'
-    #     elif(start1 == self.start0):return 'B'          
-    #     else: return None
-    
     def get_priority(self, start0 ): 
-        if (start0 == self.start0):  
-            return 'A'
-        else: 
-            return 'B'  
+        if (start0 == self.start0): return 'A'
+        else: return 'B'  
         
         # if (start0 == self.start0) and (dest0 == self.dest0): 
         #     self.controllerA.original_start = start0
@@ -396,22 +346,10 @@ class Controller:
         #     return 'B'          
         # else: return None
 
-
     async def run(self):  
         start0, dest0, start1, dest1 = self.find_point_pairs()
-        priority = self.get_priority(start0 )
+        priority = self.get_priority(start0)
         
-        # self.controllerA.original_start = start0
-        # self.controllerA.original_destination = dest0
-        # self.controllerB.original_start = start1
-        # self.controllerB.original_destination = dest1        
-
-        # self.controllerA.fetch_map()
-        # self.controllerA.get_path_direction([],start0,dest0)
-        # self.controllerB.fetch_map()
-        # self.controllerB.get_path_direction(self.controllerA.path,start1,dest1) 
-
-        # priority = 1
         self.controllerA.fetch_map()
         self.controllerB.fetch_map() 
         if priority == 'A':
@@ -425,6 +363,9 @@ class Controller:
             self.controllerB.get_path_direction(self.controllerA.path,
                                                 self.controllerB.original_start,
                                                 self.controllerB.original_destination) 
+            # self.controllerA.another_checkpoints = self.controllerB.path  
+            # self.controllerB.another_checkpoints = self.controllerA.path  
+            
         elif priority == 'B': 
             print("B")
             self.controllerB.original_start = start0
@@ -439,7 +380,9 @@ class Controller:
             self.controllerA.get_path_direction(self.controllerB.path,
                                                 self.controllerA.original_start,
                                                 self.controllerA.original_destination)
-
+            # self.controllerB.another_checkpoints = self.controllerA.path
+            # self.controllerA.another_checkpoints = self.controllerB.path  
+        
         print ("\nPathA: " , self.controllerA.path)
         print ("PathB: " , self.controllerB.path)
         # exit()
@@ -447,9 +390,8 @@ class Controller:
             await self.client.connect(self.broker_url)
             await self.client.subscribe([(self.sub_topicA, 1)])
             await self.client.subscribe([(self.sub_topicB, 1)])
-            print(f"Controller connected and listening to '{self.sub_topicA}'")
-            print(f"Controller connected and listening to '{self.sub_topicB}'")
-
+            print(f"Controller connected and listening to '{self.sub_topicA}' and '{self.sub_topicB}'")
+            # print(f"Controller connected and listening to '{self.sub_topicB}'")
             listener = asyncio.create_task(self.listener_task())
             sender = asyncio.create_task(self.automatic_publisher_task())                    
             await sender         
@@ -490,7 +432,7 @@ class CarController:
             print(f"Error building graph: {e}")
     
     def get_path_direction(self, pre_visited_path, start, end):
-        print(f"dest:  {pre_visited_path}, start: {start},end:{end}")
+        print(f"pre-path: {pre_visited_path}, start: {start},end:{end}")
         assignment1 = {start:end}
         try:   
             self.car_plan.pre_visited = set(pre_visited_path)
@@ -504,17 +446,18 @@ class CarController:
                     agv_paths[agv_id] = path
         except ValueError as e:
             print(f"Error generating plan: {e}")        
-        print(path)
+        print("Current path: ", path)
+        # print("Self path: ", self.path)
         # print(f"Found {len(self.car_plan.start_nodes)} start nodes: {self.car_plan.start_nodes}")
         # print(f"Found {len(self.car_plan.destination_nodes)} start nodes: {self.car_plan.destination_nodes}")
         
         direction = self.car_plan.extract_direction(map_url=TARGET_URL,agv_paths=agv_paths)
         self.car_plan.direction = direction['AGV1']
-        self.path = path
+        self.path = path        
         self.edge = self.car_plan.direction
         
     def update_path(self):
-        print("Another cp: ", self.another_checkpoints)   
+        print("Another cp: ", self.another_checkpoints) 
 
         if (self.path == []): 
             print(f"current position:  {self.current_position}, dest: {self.destination}")
@@ -527,12 +470,6 @@ class CarController:
                                     self.current_position, 
                                     self.destination) 
         elif self.path and len(self.path) > 1:   
-            # print("Another cp: ", self.another_checkpoints)   
-            # print(f"current position:  {self.current_position}, dest: {self.destination}")      
-            # if (self.current_position== None and self.destination == None): 
-                # self.current_position = self.car_plan.start_nodes[1]
-                # self.destination = self.car_plan.destination_nodes[1]
-                # print(f"start:  {self.current_position}, end: {self.destination}")
             self.get_path_direction(self.another_checkpoints, 
                                 self.current_position, 
                                 self.destination)    

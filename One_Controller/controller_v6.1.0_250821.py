@@ -182,8 +182,6 @@ class Controller:
         self.sub_topicA = sub_topic_A
         self.pub_topic_B = pub_topic_B
         self.sub_topicB = sub_topic_B
-        # self.controllerA = CarController( pub_topic=pub_topic_A, path=path_A, edge=edge_A,  client=self.client, car_plan= car1)
-        # self.controllerB = CarController( pub_topic=pub_topic_B, path=path_B, edge=edge_B, client=self.client , car_plan=car2)
         self.car_planner1 = MyMultiAGVPlanner(map_url=TARGET_URL, agv_speeds=SPEEDS)
         self.car_planner2 = MyMultiAGVPlanner(map_url=TARGET_URL, agv_speeds=SPEEDS) 
 
@@ -196,13 +194,6 @@ class Controller:
         self.robot_ready_eventA = asyncio.Event()
         self.robot_ready_eventB = asyncio.Event()
 
-        # self.robot_status = None      
-        # self.robot_value = None        
-        # self.current_position = None  
-        # self.car_planners = []
-        # self.car_planners.append(MyMultiAGVPlannerV2(map_url=TARGET_URL, agv_speeds=SPEEDS))
-        # self.car_planners.append(MyMultiAGVPlannerV2(map_url=TARGET_URL, agv_speeds=SPEEDS)) 
-            
     async def listener_task(self): 
         print("Listener task started: Waiting for robot status updates...")
         while True:
@@ -213,12 +204,18 @@ class Controller:
                 payload_str = packet.payload.data.decode()       
                 
                 print(f"\n[LISTEN FROM] '{topic_name}'")
-                if(topic_name == "carA/status"):                    
+                if(topic_name == "carA/status"):  
+                    print("self.controllerB.path", self.controllerB.path)
+                    # self.controllerA.other_current_position = self.controllerB.current_position
+                    self.controllerA.another_checkpoints = self.controllerB.path
                     await self.controllerA.proccess(payload_str)
+
                 elif(topic_name == "carB/status"): 
+                    # self.controllerB.other_current_position = self.controllerA.current_position
+                    # print("self.controllerA.path", self.controllerA.path)
                     self.controllerB.another_checkpoints = self.controllerA.path  
-                    await self.controllerB.proccess(payload_str)               
-                
+                    await self.controllerB.proccess(payload_str)     
+                    
             except asyncio.CancelledError:
                 print("Listener task cancelled.")
                 break
@@ -252,50 +249,6 @@ class Controller:
         path1 = controller.path 
         # print("Path found: ", path1)
         return path1    
-    
-    # def find_point_pairs(self):
-    #     planner =  MyMultiAGVPlanner(map_url=TARGET_URL, agv_speeds=SPEEDS) 
-    #     controller = CarController(self.pub_topic_A, self.client, planner)              
-    #     controller.fetch_map()
-        
-    #     start0 = controller.car_plan.start_nodes[0] #1
-    #     dest0 = controller.car_plan.destination_nodes[0] #8
-        
-    #     start1 = controller.car_plan.start_nodes[1] #6 
-    #     dest1 = controller.car_plan.destination_nodes[1] #9
-        
-    #     path1 = self.find_path(controller, dest0, start1, dest1)
-    #     path2 = self.find_path(controller, dest1, start0, dest0)
-    #     path3 = self.find_path(controller, dest0, start0, dest1)
-    #     path4 = self.find_path(controller, dest1, start1, dest0)
-        
-    #     len1 = len(path1)
-    #     len2 = len(path2)
-    #     len3 = len(path3)
-    #     len4 = len(path4)
-
-    #     #two path
-    #     if(path1 != [] and path2 != [] and path3 != [] and path4 != []):
-    #         if (len1+len2)<=(len3+len4): 
-    #             return  start0, dest0 ,start1, dest1
-    #         else: 
-    #             return start0, dest1, start1, dest0  
-    #     elif(path1 != [] and path2 != []): 
-    #         return  start0, dest0 ,start1, dest1
-    #     elif(path3 != [] and path4 != []): 
-    #         return start0, dest1, start1, dest0
-        
-    #     #one path
-    #     elif(path1 == [] and path2 != []): 
-    #         return  start1, dest1 ,start0, dest0      
-    #     elif (path1 != [] and path2 == []): 
-    #         return start0, dest0, start1, dest1
-    #     elif(path3 == [] and path4!= []): 
-    #         return start0, dest1, start1, dest0           
-    #     elif (path3 != [] and path4 == []): 
-    #         return start1, dest0, start0, dest1
-    #     else:
-    #         print("Have no path")
 
     def find_point_pairs(self):
         planner = MyMultiAGVPlanner(map_url=TARGET_URL, agv_speeds=SPEEDS)
@@ -359,16 +312,9 @@ class Controller:
         print("Have no path")
         return None
     
-    # def set_priority(self, start0, start1 ): 
-    #     if (start0 == self.start0): return 'A'
-    #     elif(start1 == self.start0):return 'B'          
-    #     else: return None
-    
     def get_priority(self, start0 ): 
-        if (start0 == self.start0):  
-            return 'A'
-        else: 
-            return 'B'  
+        if (start0 == self.start0): return 'A'
+        else: return 'B'  
         
         # if (start0 == self.start0) and (dest0 == self.dest0): 
         #     self.controllerA.original_start = start0
@@ -396,22 +342,10 @@ class Controller:
         #     return 'B'          
         # else: return None
 
-
     async def run(self):  
         start0, dest0, start1, dest1 = self.find_point_pairs()
-        priority = self.get_priority(start0 )
+        priority = self.get_priority(start0)
         
-        # self.controllerA.original_start = start0
-        # self.controllerA.original_destination = dest0
-        # self.controllerB.original_start = start1
-        # self.controllerB.original_destination = dest1        
-
-        # self.controllerA.fetch_map()
-        # self.controllerA.get_path_direction([],start0,dest0)
-        # self.controllerB.fetch_map()
-        # self.controllerB.get_path_direction(self.controllerA.path,start1,dest1) 
-
-        # priority = 1
         self.controllerA.fetch_map()
         self.controllerB.fetch_map() 
         if priority == 'A':
@@ -425,6 +359,9 @@ class Controller:
             self.controllerB.get_path_direction(self.controllerA.path,
                                                 self.controllerB.original_start,
                                                 self.controllerB.original_destination) 
+            # self.controllerA.another_checkpoints = self.controllerB.path  
+            # self.controllerB.another_checkpoints = self.controllerA.path  
+            
         elif priority == 'B': 
             print("B")
             self.controllerB.original_start = start0
@@ -439,7 +376,9 @@ class Controller:
             self.controllerA.get_path_direction(self.controllerB.path,
                                                 self.controllerA.original_start,
                                                 self.controllerA.original_destination)
-
+            # self.controllerB.another_checkpoints = self.controllerA.path
+            # self.controllerA.another_checkpoints = self.controllerB.path  
+        
         print ("\nPathA: " , self.controllerA.path)
         print ("PathB: " , self.controllerB.path)
         # exit()
@@ -447,9 +386,8 @@ class Controller:
             await self.client.connect(self.broker_url)
             await self.client.subscribe([(self.sub_topicA, 1)])
             await self.client.subscribe([(self.sub_topicB, 1)])
-            print(f"Controller connected and listening to '{self.sub_topicA}'")
-            print(f"Controller connected and listening to '{self.sub_topicB}'")
-
+            print(f"Controller connected and listening to '{self.sub_topicA}' and '{self.sub_topicB}'")
+            # print(f"Controller connected and listening to '{self.sub_topicB}'")
             listener = asyncio.create_task(self.listener_task())
             sender = asyncio.create_task(self.automatic_publisher_task())                    
             await sender         
@@ -477,9 +415,14 @@ class CarController:
         self.direction = None
         
         # self.visited_checkpoints = []
+        self.other_current_position = None
         self.another_checkpoints = []
         self.car_plan = car_plan
 
+        self.freeze_replan = False
+        self.reach_destination = False
+        self.waiting = False
+    
     def fetch_map(self):
         print("Fetching and building map data...")
         if not self.car_plan.fetch_map_data():
@@ -490,7 +433,7 @@ class CarController:
             print(f"Error building graph: {e}")
     
     def get_path_direction(self, pre_visited_path, start, end):
-        print(f"dest:  {pre_visited_path}, start: {start},end:{end}")
+        print(f"pre-path: {pre_visited_path}, start: {start},end:{end}")
         assignment1 = {start:end}
         try:   
             self.car_plan.pre_visited = set(pre_visited_path)
@@ -504,17 +447,39 @@ class CarController:
                     agv_paths[agv_id] = path
         except ValueError as e:
             print(f"Error generating plan: {e}")        
-        print(path)
+        print("Current path: ", path)
+        # print("Self path: ", self.path)
         # print(f"Found {len(self.car_plan.start_nodes)} start nodes: {self.car_plan.start_nodes}")
         # print(f"Found {len(self.car_plan.destination_nodes)} start nodes: {self.car_plan.destination_nodes}")
         
         direction = self.car_plan.extract_direction(map_url=TARGET_URL,agv_paths=agv_paths)
         self.car_plan.direction = direction['AGV1']
-        self.path = path
+        self.path = path        
         self.edge = self.car_plan.direction
         
     def update_path(self):
-        print("Another cp: ", self.another_checkpoints)   
+        # print("Another cp: ", self.another_checkpoints)
+        # print("self.freeze_replan: ", self.freeze_replan)
+        if self.freeze_replan:
+            # is_car_a = self.pub_topic.endswith("carA/command")
+
+            # if is_car_a and self.waiting and (self.another_checkpoints == []):
+            #     print("[A RESUME] B đã dừng/hoàn thành (another_checkpoints == []). Mở khóa và replan cho A từ điểm xuất phát.")
+            #     self.freeze_replan = False
+            #     self.waiting = False
+
+            #     if self.original_start is not None and self.original_destination is not None:
+            #         # Đặt A về start gốc và replan tới đích gốc, không cần pre_visited
+            #         self.current_position = self.original_start
+            #         self.destination = self.original_destination
+            #         self.get_path_direction([], self.current_position, self.destination)
+            #     else:
+            #         print("[A RESUME] Thiếu original_start/original_destination; không thể replan.")
+            #     # Sau khi mở khóa xong thì tiếp xuống luồng thường (không return)
+
+            # else:
+                print("Replan freezing")
+                return
 
         if (self.path == []): 
             print(f"current position:  {self.current_position}, dest: {self.destination}")
@@ -527,12 +492,6 @@ class CarController:
                                     self.current_position, 
                                     self.destination) 
         elif self.path and len(self.path) > 1:   
-            # print("Another cp: ", self.another_checkpoints)   
-            # print(f"current position:  {self.current_position}, dest: {self.destination}")      
-            # if (self.current_position== None and self.destination == None): 
-                # self.current_position = self.car_plan.start_nodes[1]
-                # self.destination = self.car_plan.destination_nodes[1]
-                # print(f"start:  {self.current_position}, end: {self.destination}")
             self.get_path_direction(self.another_checkpoints, 
                                 self.current_position, 
                                 self.destination)    
@@ -592,19 +551,61 @@ class CarController:
         
         print(f"  -> Parsed: Status='{status_type}', Value={value}")
         
-        # is_valid_checkpoint = self.check_checkpoint()
-        # if not is_valid_checkpoint:
-        #     print("!! WARNING: Invalid or out-of-sequence checkpoint received. Robot may be off-track. !!")
-        # if status_type == 'checkpoint' and not self.check_checkpoint(self.path,value): 
-        if status_type == 'checkpoint' and not self.check_checkpoint(self.path,value): 
+        is_car_a = pub_topic.endswith("carA/command")
+        is_car_b = pub_topic.endswith("carB/command")
+
+        if status_type == 'checkpoint' and self.freeze_replan:
+            self.freeze_replan = False            
+            self.current_position = value            
             await self.send_command(self.pub_topic, "wait")
             self.update_path()
+        
+        if status_type == 'checkpoint' and not self.check_checkpoint(self.path,value): 
+            if is_car_a:
+                print("[RECOVERY] Car A reached a wrong checkpoint. Initiating 45° turn")
+                await self.send_command(self.pub_topic, "turn 45 degree")
+                await asyncio.sleep(2)
+                await self.send_command(self.pub_topic, "move out") 
+                
+                self.path = []
+                self.edge = []
+                self.freeze_replan = True
+                self.waiting = True
+                # await asyncio.sleep(2)
+                # await self.send_command(self.pub_topic, "stop")
+                return
+
+                # if self.original_start is not None:
+
+                #     if self.original_destination is not None:
+                #         print(f"[RESET] Car A back at start={self.original_start}")
+                #         self.current_position = self.original_start
+                #         # self.destination = self.original_destination
+                #         self.car_plan.pre_visited = [self.other_current_position]
+                #         self.get_path_direction(self.car_plan.pre_visited, self.original_start, self.original_destination)
+                #         # get_path_direction updates: self.path and self.edge internally
+                    
+                #     else: 
+                #         print(f"[RESET] Parking Car A back at start={self.original_start}.")
+                #         self.current_position = -1
+                #         # self.current_position = self.original_start
+                #         # self.destination = self.original_start                
+                #         self.path = [self.original_start]
+                #         self.edge = []
+                #         # print("Another: ", self.another_checkpoints)
+                #         self.car_plan.pre_visited = [self.other_current_position]
+            else:
+                self.current_position = value            
+                await self.send_command(self.pub_topic, "wait")
+                self.update_path()
+
         elif status_type == 'checkpoint' and self.check_checkpoint(self.path,value):
             print(f"Robot has reached valid checkpoint {value}. Updating position.")
             current_position = value
             self.current_position = current_position 
             self.destination = self.path[-1] 
-            self.reset_direction(self.path,current_position,direction)                   
+            self.reset_direction(self.path,current_position,direction)        
+
             if (self.next_direction(self.path, current_position,self.edge) - direction) == 0:
                 await self.send_command(pub_topic, "move")   
                 self.direction = self.next_direction(self.path, current_position,self.edge)                     
@@ -616,14 +617,21 @@ class CarController:
                 self.direction = self.next_direction(self.path, current_position,self.edge)                     
             elif self.next_direction(self.path, current_position,self.edge) == -99:                         
                 await self.send_command(pub_topic, "stop")
-                self.direction = self.next_direction(self.path, current_position,self.edge)   
+                self.direction = self.next_direction(self.path, current_position,self.edge)
+
         self.update_path()
         if status_type == "done": 
             await self.send_command(pub_topic, "move")              
         elif status_type == "stopped": 
-            print("Car stopped")               
-        # elif status_type == "waiting done": 
-        #     self.update_path()
+            self.reach_destination = True
+            print("Car stopped")  
+            if is_car_b:
+                print("[B COMPLETE] B reached destination.Clearing B.path")
+                self.path = []
+                self.edge = []
+                self.freeze_replan = True
+                # self.reach_destination = True
+                    
 
 if __name__ == "__main__": 
     controller = Controller(BROKER_URL, TOPIC_PUBLISH_A, TOPIC_SUBSCRIBE_A, TOPIC_PUBLISH_B, TOPIC_SUBSCRIBE_B)
