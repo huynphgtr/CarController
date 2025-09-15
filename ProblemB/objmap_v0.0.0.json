@@ -1,8 +1,6 @@
-from pyvis.network import Network
-
-graph_data = {
+{
     "id": "980778ba-4ce1-4094-81d8-aa1f6da40b93",
-    "name": "Custom Public Map (with Load/Unload)",
+    "name": "Custom Grid Map with Load/Unload/Destination",
     "mapType": "custom",
     "orderIndex": 10,
     "dimensions": {
@@ -38,19 +36,19 @@ graph_data = {
             "id": 5,
             "x": 4,
             "y": 0,
-            "type": "LOAD"
+            "type": "START"
         },
         {
             "id": 6,
             "x": 0,
             "y": 1,
-            "type": "START"
+            "type": "NORMAL"
         },
         {
             "id": 7,
             "x": 1,
             "y": 1,
-            "type": "NORMAL"
+            "type": "LOAD"
         },
         {
             "id": 8,
@@ -62,13 +60,13 @@ graph_data = {
             "id": 9,
             "x": 3,
             "y": 1,
-            "type": "DESTINATION"
+            "type": "UNLOAD"
         },
         {
             "id": 10,
             "x": 4,
             "y": 1,
-            "type": "UNLOAD"
+            "type": "NORMAL"
         },
         {
             "id": 11,
@@ -80,17 +78,23 @@ graph_data = {
             "id": 12,
             "x": 1,
             "y": 2,
-            "type": "UNLOAD"
+            "type": "NORMAL"
         },
         {
             "id": 13,
             "x": 2,
             "y": 2,
-            "type": "LOAD"
+            "type": "DESTINATION"
         },
         {
             "id": 14,
             "x": 3,
+            "y": 2,
+            "type": "NORMAL"
+        },
+        {
+            "id": 15,
+            "x": 4,
             "y": 2,
             "type": "UNLOAD"
         }
@@ -101,12 +105,6 @@ graph_data = {
             "source": 1,
             "target": 2,
             "label": "E"
-        },
-        {
-            "id": "1-6",
-            "source": 1,
-            "target": 6,
-            "label": "S"
         },
         {
             "id": "2-1",
@@ -121,12 +119,6 @@ graph_data = {
             "label": "E"
         },
         {
-            "id": "2-7",
-            "source": 2,
-            "target": 7,
-            "label": "S"
-        },
-        {
             "id": "3-2",
             "source": 3,
             "target": 2,
@@ -139,22 +131,10 @@ graph_data = {
             "label": "E"
         },
         {
-            "id": "3-8",
-            "source": 3,
-            "target": 8,
-            "label": "S"
-        },
-        {
             "id": "4-3",
             "source": 4,
             "target": 3,
             "label": "W"
-        },
-        {
-            "id": "4-9",
-            "source": 4,
-            "target": 9,
-            "label": "S"
         },
         {
             "id": "4-5",
@@ -169,34 +149,10 @@ graph_data = {
             "label": "W"
         },
         {
-            "id": "5-10",
-            "source": 5,
-            "target": 10,
-            "label": "S"
-        },
-        {
-            "id": "10-5",
-            "source": 10,
-            "target": 5,
-            "label": "N"
-        },
-        {
-            "id": "6-1",
-            "source": 6,
-            "target": 1,
-            "label": "N"
-        },
-        {
             "id": "6-7",
             "source": 6,
             "target": 7,
             "label": "E"
-        },
-        {
-            "id": "7-2",
-            "source": 7,
-            "target": 2,
-            "label": "N"
         },
         {
             "id": "7-6",
@@ -211,12 +167,6 @@ graph_data = {
             "label": "E"
         },
         {
-            "id": "8-3",
-            "source": 8,
-            "target": 3,
-            "label": "N"
-        },
-        {
             "id": "8-7",
             "source": 8,
             "target": 7,
@@ -227,12 +177,6 @@ graph_data = {
             "source": 8,
             "target": 9,
             "label": "E"
-        },
-        {
-            "id": "9-4",
-            "source": 9,
-            "target": 4,
-            "label": "N"
         },
         {
             "id": "9-8",
@@ -251,54 +195,6 @@ graph_data = {
             "source": 10,
             "target": 9,
             "label": "W"
-        },
-        {
-            "id": "11-6",
-            "source": 11,
-            "target": 6,
-            "label": "N"
-        },
-        {
-            "id": "6-11",
-            "source": 6,
-            "target": 11,
-            "label": "S"
-        },
-        {
-            "id": "12-7",
-            "source": 12,
-            "target": 7,
-            "label": "N"
-        },
-        {
-            "id": "7-12",
-            "source": 7,
-            "target": 12,
-            "label": "S"
-        },
-        {
-            "id": "13-8",
-            "source": 13,
-            "target": 8,
-            "label": "N"
-        },
-        {
-            "id": "8-13",
-            "source": 8,
-            "target": 13,
-            "label": "S"
-        },
-        {
-            "id": "14-9",
-            "source": 14,
-            "target": 9,
-            "label": "N"
-        },
-        {
-            "id": "9-14",
-            "source": 9,
-            "target": 14,
-            "label": "S"
         },
         {
             "id": "11-12",
@@ -335,33 +231,149 @@ graph_data = {
             "source": 14,
             "target": 13,
             "label": "W"
+        },
+        {
+            "id": "14-15",
+            "source": 14,
+            "target": 15,
+            "label": "E"
+        },
+        {
+            "id": "15-14",
+            "source": 15,
+            "target": 14,
+            "label": "W"
+        },
+        {
+            "id": "1-6",
+            "source": 1,
+            "target": 6,
+            "label": "S"
+        },
+        {
+            "id": "6-1",
+            "source": 6,
+            "target": 1,
+            "label": "N"
+        },
+        {
+            "id": "2-7",
+            "source": 2,
+            "target": 7,
+            "label": "S"
+        },
+        {
+            "id": "7-2",
+            "source": 7,
+            "target": 2,
+            "label": "N"
+        },
+        {
+            "id": "3-8",
+            "source": 3,
+            "target": 8,
+            "label": "S"
+        },
+        {
+            "id": "8-3",
+            "source": 8,
+            "target": 3,
+            "label": "N"
+        },
+        {
+            "id": "4-9",
+            "source": 4,
+            "target": 9,
+            "label": "S"
+        },
+        {
+            "id": "9-4",
+            "source": 9,
+            "target": 4,
+            "label": "N"
+        },
+        {
+            "id": "5-10",
+            "source": 5,
+            "target": 10,
+            "label": "S"
+        },
+        {
+            "id": "10-5",
+            "source": 10,
+            "target": 5,
+            "label": "N"
+        },
+        {
+            "id": "6-11",
+            "source": 6,
+            "target": 11,
+            "label": "S"
+        },
+        {
+            "id": "11-6",
+            "source": 11,
+            "target": 6,
+            "label": "N"
+        },
+        {
+            "id": "7-12",
+            "source": 7,
+            "target": 12,
+            "label": "S"
+        },
+        {
+            "id": "12-7",
+            "source": 12,
+            "target": 7,
+            "label": "N"
+        },
+        {
+            "id": "8-13",
+            "source": 8,
+            "target": 13,
+            "label": "S"
+        },
+        {
+            "id": "13-8",
+            "source": 13,
+            "target": 8,
+            "label": "N"
+        },
+        {
+            "id": "9-14",
+            "source": 9,
+            "target": 14,
+            "label": "S"
+        },
+        {
+            "id": "14-9",
+            "source": 14,
+            "target": 9,
+            "label": "N"
+        },
+        {
+            "id": "10-15",
+            "source": 10,
+            "target": 15,
+            "label": "S"
+        },
+        {
+            "id": "15-10",
+            "source": 15,
+            "target": 10,
+            "label": "N"
         }
     ],
     "startingPositions": [
         1,
-        6
+        5
     ],
     "destinationPositions": [
         8,
-        9
+        13
     ],
-    "barriersOpen": False,
+    "barriersOpen": false,
     "startTime": "2025-07-29T03:34:13.541020Z",
-    "isPublic": True
+    "isPublic": true
 }
-
-net = Network(notebook=True, cdn_resources='in_line')
-
-for node in graph_data['nodes']:
-    net.add_node(node['id'], 
-                 label=f"{node['id']} ({node['type']})", 
-                 x=node['x']*100, y=node['y']*100)
-
-for edge in graph_data['edges']:
-    net.add_edge(edge['source'], edge['target'], label=edge['label'])
-
-
-html_content = net.generate_html()
-with open("graph4.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
-

@@ -1,0 +1,96 @@
+{
+  "map_id": "980778ba-4ce1-4094-81d8-aa1f6da40b93",
+  "agv_count": 2,
+  "total_distance": 7.0,
+  "total_time": 4.5,
+  "agv_plans": [
+    {
+      "agv_id": "AGV1",
+      "start_node": 1,
+      "destination": 8,
+      "speed": 1.0,
+      "movements": [
+        {
+          "from": 1,
+          "to": 8,
+          "path": [
+            1,
+            2,
+            3,
+            8
+          ],
+          "distance": 3.0,
+          "travel_time": 3.0,
+          "scheduled_path": [
+            [
+              1,
+              0
+            ],
+            [
+              2,
+              1.0
+            ],
+            [
+              3,
+              2.0
+            ],
+            [
+              8,
+              3.0
+            ]
+          ]
+        }
+      ],
+      "total_distance": 3.0,
+      "total_time": 3.0
+    },
+    {
+      "agv_id": "AGV2",
+      "start_node": 5,
+      "destination": 13,
+      "speed": 1.0,
+      "movements": [
+        {
+          "from": 5,
+          "to": 13,
+          "path": [
+            5,
+            4,
+            3,
+            8,
+            13
+          ],
+          "distance": 4.0,
+          "travel_time": 4.0,
+          "scheduled_path": [
+            [
+              5,
+              0
+            ],
+            [
+              4,
+              1.0
+            ],
+            [
+              3,
+              2.5
+            ],
+            [
+              8,
+              3.5
+            ],
+            [
+              13,
+              4.5
+            ]
+          ]
+        }
+      ],
+      "total_distance": 4.0,
+      "total_time": 4.5
+    }
+  ],
+  "timestamp": "2025-09-07T14:30:35.084995",
+  "agv_speeds": {},
+  "collision_avoidance_enabled": true
+}
